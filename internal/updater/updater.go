@@ -69,7 +69,7 @@ type Updater struct {
 
 func New(o Options) *Updater {
 	if o.HTTPClient == nil {
-		o.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+		o.HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 	}
 	if o.Channel == "" {
 		o.Channel = "stable"

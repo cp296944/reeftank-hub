@@ -16,7 +16,7 @@
 ## 實機基線
 
 - Raspberry Pi：`192.168.0.149`
-- 目前版本：`hub-v0.1.2`（本版發布後可 OTA 更新）
+- 目前版本：`hub-v0.4.0`（2026-09-22 網頁 OTA 成功）
 - Channel：stable
 - Auto Update：off
 - `/healthz`：正常
@@ -35,6 +35,8 @@
 - [x] Phase 6：K7 transport 預設休眠，開啟 K7 頁面時建立租約，頁面離開後逾時休眠。
 - [x] Phase 7 軟體：四泵頭設定、校正、容器、液量、每日總量、分次／星期排程、預估消耗、手動模擬、稽核及四類故障注入；BLE capability 維持未驗證。
 - [x] Phase 8：首頁整合 HA、電力、生命維持設備、獨立溫度、水質及滴定來源狀態。
+- [x] Phase 9：GitHub SHA-256 Release、OTA 前 SQLite 備份、獨立 release 目錄、原子 symlink、健康確認及既有自動回滾測試；`hub-v0.4.0` 實機 OTA 成功且保留 136,621 筆 HA 樣本。
+- [ ] Phase 10：BLE transport 必須在使用者與實機旁依安全順序驗證；目前所有 capability 均正確標示 `ble_verified=false`。
 
 ## 已完成
 

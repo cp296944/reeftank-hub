@@ -45,6 +45,13 @@ HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
 `config.json`、Hub 資料備份或 Git repository。環境變數名稱為 `HA_URL` 與
 `HA_TOKEN`；應使用專屬 HA 使用者所建立的 Token。
 
+## 小魚未來獨立水溫
+
+在同一個 root-only 環境檔設定 `XIAOYU_URL`。網址包含設備序號，因此視為
+敏感資料，不寫入一般設定、網頁回應、備份或 Git。Hub 每 60 秒直接查詢、
+保留最後成功值及延遲／過期狀態，並將歷史永久保存到 SQLite；首頁不透過 HA
+轉傳水溫。
+
 Hub 首頁右上角集中管理檢查更新、立即 OTA、自動更新與版本歷程；K7
 頁面只保留燈具本身的語言、監視與設定。電源頁透過 HA API 顯示三條
 排插的即時狀態、18 路明細、總能耗及 7 天趨勢，控制操作只允許目前

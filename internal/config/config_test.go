@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,24 @@ func TestHomeAssistantEnvironmentAndSecretSerialization(t *testing.T) {
 	b, _ := os.ReadFile(p)
 	if strings.Contains(string(b), "super-secret-token") || strings.Contains(string(b), "ha_token") {
 		t.Fatal("HA token was serialized")
+	}
+}
+
+func TestXiaoyuURLIsEnvironmentOnly(t *testing.T) {
+	t.Setenv("XIAOYU_URL", "https://example.test/device?serialNo=secret")
+	cfg, err := Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.XiaoyuURL == "" {
+		t.Fatal("XIAOYU_URL was not loaded")
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "serialNo") || strings.Contains(string(b), "secret") {
+		t.Fatal("Xiaoyu secret URL was serialized")
 	}
 }
 

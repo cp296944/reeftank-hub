@@ -46,6 +46,10 @@ type Config struct {
 	HAURL   string `json:"ha_url,omitempty"`
 	HAToken string `json:"-"`
 
+	// Xiaoyu Weilai temperature source. The URL contains the device serial and
+	// therefore stays environment-only, just like the HA token.
+	XiaoyuURL string `json:"-"`
+
 	// Ops.
 	BackupTarget string `json:"backup_target"` // rsync/scp dest, "" = off
 	LogLevel     string `json:"log_level"`     // debug|info|warn|error
@@ -156,6 +160,9 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("HA_TOKEN"); v != "" {
 		cfg.HAToken = strings.TrimSpace(v)
 	}
+	if v := os.Getenv("XIAOYU_URL"); v != "" {
+		cfg.XiaoyuURL = strings.TrimSpace(v)
+	}
 }
 
 func (c Config) validate() error {
@@ -172,6 +179,12 @@ func (c Config) validate() error {
 		u, err := url.Parse(c.HAURL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("ha_url %q invalid", c.HAURL)
+		}
+	}
+	if c.XiaoyuURL != "" {
+		u, err := url.Parse(c.XiaoyuURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" {
+			return fmt.Errorf("xiaoyu_url invalid (HTTPS URL required)")
 		}
 	}
 	switch c.LogLevel {

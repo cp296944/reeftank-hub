@@ -37,6 +37,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/ringlog"
 	"github.com/cp296944/reeftank-hub/internal/storage"
 	"github.com/cp296944/reeftank-hub/internal/tally"
+	"github.com/cp296944/reeftank-hub/internal/temperature"
 	"github.com/cp296944/reeftank-hub/internal/updater"
 	"github.com/cp296944/reeftank-hub/internal/version"
 )
@@ -108,10 +109,12 @@ func run(args []string) error {
 	haClient := homeassistant.New(cfg.HAURL, cfg.HAToken)
 	haSync := homeassistant.NewSyncer(haClient, hubDB, homeassistant.TrackedEntities(equipmentStore.Snapshot()))
 	haAPI := &homeassistant.API{Client: haClient, Equipment: equipmentStore, Sync: haSync}
+	temperaturePoller := temperature.New(cfg.XiaoyuURL, hubDB)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go haSync.Run(ctx)
+	go temperaturePoller.Run(ctx)
 	go func() {
 		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 		defer cancel()
@@ -269,7 +272,7 @@ func run(args []string) error {
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, hubDB.Register),
+		Handler:           routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, hubDB.Register),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

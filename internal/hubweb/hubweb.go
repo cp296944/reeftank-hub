@@ -80,9 +80,9 @@ func (h *handler) serveModule(w http.ResponseWriter, r *http.Request) {
 	}
 	replacements := map[string][3]string{
 		"dosing": {"魔點四頭滴定", "校正、容器、排程與手動滴定", "軟體架構建構中；實機 BLE 驗證將在後續進行。"},
-		"power":  {"電源監控", "三組排插與 18 路設備", "等待 Home Assistant WebSocket 整合。"},
+		"power":  {"電源監控", "三組排插與 18 路設備", "Home Assistant 即時狀態與 Hub 本機歷史。"},
 		"water":  {"水質與換水", "Google 試算表為主資料來源", "等待水質鏡射及本機歷史資料庫。"},
-		"system": {"系統狀態", "連線、版本、備份與 OTA", "正在建立安全的 bootstrap 與維護流程。"},
+		"system": {"系統狀態", "連線、版本、備份與 OTA", "檢查資料來源、資料庫及更新狀態。"},
 	}
 	copyText := string(b)
 	info := replacements[name]
@@ -123,7 +123,7 @@ func (h *handler) serveStatus(w http.ResponseWriter) {
 			"k7":             "available",
 			"home_assistant": "mapping_ready",
 			"water_quality":  "planned",
-			"temperature":    "planned",
+			"temperature":    "available",
 			"dosing":         "simulation_planned",
 		},
 	})

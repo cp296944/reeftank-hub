@@ -67,6 +67,7 @@ func (d *DB) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_entity_samples_time ON entity_samples(entity_id, source_time)`,
 		`CREATE TABLE IF NOT EXISTS equipment_mapping(device_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, switch_entity TEXT NOT NULL, slot INTEGER NOT NULL, critical INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS water_quality(id INTEGER PRIMARY KEY, metric TEXT NOT NULL, value REAL, unit TEXT, source_time TEXT NOT NULL, received_time TEXT NOT NULL, UNIQUE(metric, source_time))`,
+		`CREATE TABLE IF NOT EXISTS temperature_samples(source TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL, source_time TEXT NOT NULL, received_time TEXT NOT NULL, latency_ms INTEGER, PRIMARY KEY(source,source_time))`,
 		`CREATE TABLE IF NOT EXISTS dosing_heads(id INTEGER PRIMARY KEY, name TEXT NOT NULL, liquid TEXT, calibration REAL, container_ml REAL, remaining_ml REAL, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS dosing_audit(id INTEGER PRIMARY KEY, head_id INTEGER, action TEXT NOT NULL, amount_ml REAL, status TEXT NOT NULL, detail TEXT, source_time TEXT NOT NULL, received_time TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`,
@@ -84,6 +85,51 @@ func (d *DB) migrate(ctx context.Context) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func (d *DB) RecordTemperature(ctx context.Context, value float64, sourceTime, received time.Time, latency time.Duration) error {
+	_, err := d.db.ExecContext(ctx, `INSERT OR REPLACE INTO temperature_samples(source,value,unit,source_time,received_time,latency_ms) VALUES(?,?,?,?,?,?)`, "xiaoyu", value, "°C", sourceTime.UTC().Format(time.RFC3339Nano), received.UTC().Format(time.RFC3339Nano), latency.Milliseconds())
+	return err
+}
+
+func (d *DB) TemperatureCount(ctx context.Context) (int64, error) {
+	var n int64
+	err := d.db.QueryRowContext(ctx, `SELECT count(*) FROM temperature_samples`).Scan(&n)
+	return n, err
+}
+
+type HistoryPoint struct {
+	EntityID    string `json:"entity_id"`
+	State       string `json:"state"`
+	LastUpdated string `json:"last_updated"`
+}
+
+func (d *DB) History(ctx context.Context, entityIDs []string, since time.Time) ([][]HistoryPoint, error) {
+	out := make([][]HistoryPoint, 0, len(entityIDs))
+	for _, id := range entityIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		rows, err := d.db.QueryContext(ctx, `SELECT entity_id,state,source_time FROM entity_samples WHERE entity_id=? AND source_time>=? ORDER BY source_time`, id, since.UTC().Format(time.RFC3339Nano))
+		if err != nil {
+			return nil, err
+		}
+		group := []HistoryPoint{}
+		for rows.Next() {
+			var p HistoryPoint
+			if err := rows.Scan(&p.EntityID, &p.State, &p.LastUpdated); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			group = append(group, p)
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		out = append(out, group)
+	}
+	return out, nil
 }
 
 func (d *DB) RecordState(ctx context.Context, state homeassistant.State, received time.Time) error {

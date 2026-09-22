@@ -16,11 +16,20 @@
 ## 實機基線
 
 - Raspberry Pi：`192.168.0.149`
-- 目前版本：`pi-v1.0.4`
+- 目前版本：`hub-v0.1.2`（本版發布後可 OTA 更新）
 - Channel：stable
 - Auto Update：off
 - `/healthz`：正常
-- 實機尚未部署 Hub 或執行 bootstrap。
+- Hub bootstrap、K7 資料遷移與隔離回滾演練已完成；服務已切換為 `reeftank-hub`。
+
+## 本版完成範圍
+
+- [x] Phase 0：K7 相容、設定與資料遷移、舊 OTA 過渡與回滾基線。
+- [x] Phase 1：共用 Hub 外殼、響應式頁面與六個固定路由。
+- [x] Phase 2：SQLite migration、來源狀態、設備映射、HA／水溫歷史、備份、匯出與損壞復原。
+- [x] Phase 3：HA REST + WebSocket 即時訂閱、18 路插座映射／控制、關鍵設備確認、stale 保護、原始歷史回補與 Hub 本機趨勢。
+- [x] Phase 5：小魚未來獨立查詢、最後成功值／過期／延遲與 SQLite 永久保存。
+- [x] Phase 8（現有資料範圍）：首頁彙整水溫、HA 健康、總功率、月用電與來源狀態；Google 水質與滴定清楚標示尚未完成。
 
 ## 已完成
 
@@ -58,6 +67,7 @@
 - [ ] 完成 K7 共用路徑同步檢查及 PR workflow。
 - [x] 完成並發布舊 repo `pi-v1.1.0` 過渡版。
 - [x] 在隔離目錄演練 bootstrap／migration／rollback，並唯讀確認實機回滾資產存在。
-- [ ] HA WebSocket 即時快取、完整歷史回補與本機長期資料庫（目前即時／開關與 HA 7 天原始歷史已接通）。
-- [ ] Google 水質鏡射及獨立水溫查詢。
+- [x] HA WebSocket 即時快取、可取得的 Recorder 原始歷史回補與本機永久資料庫。
+- [ ] Google 水質鏡射（Phase 4）。
+- [x] 獨立小魚未來水溫查詢與歷史（實機需設定 `XIAOYU_URL`）。
 - [ ] 滴定領域模型、模擬器與完整介面。

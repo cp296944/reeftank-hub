@@ -5,7 +5,7 @@
 ## 已確認決策
 
 - Hub 使用獨立 repo：`cp296944/reeftank-hub`。
-- 開發期間 repo 為 Private；正式使用無 Token GitHub Release OTA 前改為 Public。
+- Repo 已改為 Public，讓 Raspberry Pi 可無 Token 下載經雜湊驗證的 Release。
 - HA 保留設備管理、自動化及告警。
 - Google Sheet 保留水質主資料權。
 - Hub 與 HA 各自查詢小魚未來水溫。
@@ -39,20 +39,20 @@
 以下全部完成後，才向使用者提供實機 bootstrap 指令：
 
 - [x] 新 repo CI 能測試及產生 `linux/arm64` binary（首次 main build 2026-09-22 通過）。
-- [ ] `hub-v0.1.0` release pipeline 實際演練成功。
-- [ ] 舊 K7 `pi-v1.1.0` 過渡版能備份並切換到 Hub repo。
-- [ ] `/opt/k7-pi-bridge/data` → `/opt/reeftank-hub/data` 遷移測試。
-- [ ] 新舊服務不會同時占用 port 80 與 8266。
-- [ ] Bootstrap 可重跑、失敗復原及回到 `pi-v1.0.4` 演練。
-- [ ] K7 排程、profile、寫入次數及設定在轉換後一致。
+- [x] `hub-v0.1.0` release pipeline 實際演練成功，公開資產下載及 SHA-256 驗證通過。
+- [x] 舊 K7 `pi-v1.1.0` 過渡版已發布，能備份並切換到 Hub repo。
+- [x] `/opt/k7-pi-bridge/data` → `/opt/reeftank-hub/data` 隔離遷移測試通過。
+- [x] 服務切換順序固定為停止 K7 後才啟用 Hub，不會同時占用 port 80 與 8266。
+- [x] 失敗復原會依 K7 `state/PREVIOUS` 原子切回 `pi-v1.0.4`；成功、失敗及不安全目標測試通過。
+- [x] `config.json`、`effects.json`、`store.json`、`writes.json`、`soak.log` 與完整 `profiles/` 都列入遷移及備份測試。
 
 ## 下一步
 
 - [x] 建立 Hub GitHub Actions 與 release manifest。
 - [x] 建立 K7 allowlist 同步 workflow；未設定專用 Token 時確認為只讀跳過。
 - [ ] 完成 K7 共用路徑同步檢查及 PR workflow。
-- [ ] 完成舊 repo 過渡版。
-- [ ] 在隔離目錄演練 bootstrap／migration／rollback。
+- [x] 完成並發布舊 repo `pi-v1.1.0` 過渡版。
+- [x] 在隔離目錄演練 bootstrap／migration／rollback，並唯讀確認實機回滾資產存在。
 - [ ] HA 即時狀態快取與本機歷史資料庫。
 - [ ] Google 水質鏡射及獨立水溫查詢。
 - [ ] 滴定領域模型、模擬器與完整介面。

@@ -28,7 +28,9 @@ Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口
 - Release：`hub-v*`
 - OTA 資產：`reeftank-hub-linux-arm64`
 
-目前 Raspberry Pi 仍運行舊 K7 `pi-v1.0.4`。在 bootstrap、備份與回滾演練完成前，不會將開發版本部署到實機。
+目前 Raspberry Pi 仍安全運行舊 K7 `pi-v1.0.4`。`hub-v0.1.0` 與過渡版
+`pi-v1.1.0` 已發布，公開下載、雜湊、資料遷移及隔離回滾演練均已通過；
+實機只會在使用者手動確認 OTA 與 bootstrap 後切換。
 
 ## K7 雙專案同步原則
 

@@ -72,7 +72,9 @@ type Updater struct {
 
 func New(o Options) *Updater {
 	if o.HTTPClient == nil {
-		o.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+		// Release binaries grew after SQLite was added. Slow Raspberry Pi / GitHub
+		// links can legitimately need more than 30 seconds for a verified download.
+		o.HTTPClient = &http.Client{Timeout: 5 * time.Minute}
 	}
 	if o.Channel == "" {
 		o.Channel = "stable"

@@ -34,6 +34,7 @@
 - [x] 18 路邏輯設備名稱及 HA entity 映射資料層。
 - [x] `/power/` 設備映射介面；占用中的實體以交換方式重新配置。
 - [x] `/power/` 依現有 HA 儀表板分成 `3A31 主機`、`3F2D 副機`、`BFB9 擴充` 三條六孔延長線；資料模型同時保存各排插的 LED、電流、瓦數、今日、本月與運行時間實體。
+- [x] HA 憑證安全入口：固定使用 root-only `/etc/reeftank-hub/ha.env`，systemd 載入 `HA_URL`/`HA_TOKEN`；Token 永不序列化到一般設定、資料備份或 Git。
 
 ## Bootstrap 放行條件
 

@@ -27,6 +27,8 @@ func TestInstallIntoSandboxAndRerun(t *testing.T) {
 		t.Fatal("first install reported no changes")
 	}
 	for _, name := range []string{
+		"etc/systemd/system/reeftank-hub.service",
+		"etc/reeftank-hub",
 		"etc/systemd/system/reeftank-hub-maintenance.service",
 		"etc/polkit-1/rules.d/50-reeftank-hub-maintenance.rules",
 		"usr/local/libexec/reeftank-hub-maintainer",

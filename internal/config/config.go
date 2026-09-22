@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -41,6 +42,10 @@ type Config struct {
 	InstallRoot string `json:"install_root"` // OTA layout root (releases/, current, state/)
 	DataDir     string `json:"data_dir"`     // writable app state; default ${InstallRoot}/data
 
+	// Home Assistant. The token is environment-only and is never serialized.
+	HAURL   string `json:"ha_url,omitempty"`
+	HAToken string `json:"-"`
+
 	// Ops.
 	BackupTarget string `json:"backup_target"` // rsync/scp dest, "" = off
 	LogLevel     string `json:"log_level"`     // debug|info|warn|error
@@ -62,6 +67,7 @@ func Defaults() Config {
 		AutoUpdate:     false, // manual by default — the UI's "檢查更新 / 立即更新" button
 		InstallRoot:    "/opt/reeftank-hub",
 		DataDir:        "", // filled by normalize() to ${InstallRoot}/data
+		HAURL:          "",
 		BackupTarget:   "",
 		LogLevel:       "info",
 	}
@@ -144,6 +150,12 @@ func applyEnv(cfg *Config) {
 			cfg.LampPort = n
 		}
 	}
+	if v := os.Getenv("HA_URL"); v != "" {
+		cfg.HAURL = strings.TrimRight(strings.TrimSpace(v), "/")
+	}
+	if v := os.Getenv("HA_TOKEN"); v != "" {
+		cfg.HAToken = strings.TrimSpace(v)
+	}
 }
 
 func (c Config) validate() error {
@@ -155,6 +167,12 @@ func (c Config) validate() error {
 	}
 	if strings.TrimSpace(c.Listen) == "" {
 		return fmt.Errorf("listen is empty")
+	}
+	if c.HAURL != "" {
+		u, err := url.Parse(c.HAURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("ha_url %q invalid", c.HAURL)
+		}
 	}
 	switch c.LogLevel {
 	case "debug", "info", "warn", "error":

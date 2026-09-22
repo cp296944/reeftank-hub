@@ -70,12 +70,20 @@ func Install(o InstallOptions) (InstallResult, error) {
 	if err := os.MkdirAll(backupDir, 0o750); err != nil {
 		return InstallResult{}, fmt.Errorf("create backup directory: %w", err)
 	}
+	credentialDir := rooted(o.SystemRoot, "/etc/reeftank-hub")
+	if err := os.MkdirAll(credentialDir, 0o700); err != nil {
+		return InstallResult{}, fmt.Errorf("create credential directory: %w", err)
+	}
+	if err := os.Chmod(credentialDir, 0o700); err != nil {
+		return InstallResult{}, fmt.Errorf("protect credential directory: %w", err)
+	}
 
 	files := []struct {
 		asset string
 		dest  string
 		mode  fs.FileMode
 	}{
+		{"assets/reeftank-hub.service", rooted(o.SystemRoot, "/etc/systemd/system/reeftank-hub.service"), 0o644},
 		{"assets/reeftank-hub-maintenance.service", rooted(o.SystemRoot, "/etc/systemd/system/reeftank-hub-maintenance.service"), 0o644},
 		{"assets/50-reeftank-hub-maintenance.rules", rooted(o.SystemRoot, "/etc/polkit-1/rules.d/50-reeftank-hub-maintenance.rules"), 0o644},
 	}
@@ -126,6 +134,8 @@ func Install(o InstallOptions) (InstallResult, error) {
 	marker := Marker{
 		Schema: 1, InstalledAt: o.Now().UTC(), Version: o.Version,
 		Components: map[string]string{
+			"main_service":       "reeftank-hub.service",
+			"credential_dir":     credentialDir,
 			"maintenance_helper": helper,
 			"systemd_unit":       "reeftank-hub-maintenance.service",
 			"polkit_rule":        "50-reeftank-hub-maintenance.rules",
@@ -137,7 +147,7 @@ func Install(o InstallOptions) (InstallResult, error) {
 	if err := writeAtomic(markerPath, append(b, '\n'), 0o644); err != nil {
 		return InstallResult{}, fmt.Errorf("write bootstrap marker: %w", err)
 	}
-	return InstallResult{Changed: changed, BackupDir: backupDir, Components: []string{"maintenance_helper", "systemd_unit", "polkit_rule", "bluez"}}, nil
+	return InstallResult{Changed: changed, BackupDir: backupDir, Components: []string{"main_service", "credential_dir", "maintenance_helper", "systemd_unit", "polkit_rule", "bluez"}}, nil
 }
 
 func rooted(root, absolute string) string {

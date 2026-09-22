@@ -38,6 +38,13 @@ ReefTank Hub 內的 K7 共用程式是日後功能開發來源。`sync/k7-paths.
 
 跨專案自動 PR 需要專用 fine-grained token，權限僅限舊 K7 repo 的 Contents 與 Pull requests。未設定 token 時，CI 只做差異檢查，仍可使用本機同步工具。
 
+## Home Assistant 憑證
+
+HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
+`/etc/reeftank-hub/ha.env`。此檔案為 root-only、由 systemd 載入，不會寫入
+`config.json`、Hub 資料備份或 Git repository。環境變數名稱為 `HA_URL` 與
+`HA_TOKEN`；應使用專屬 HA 使用者所建立的 Token。
+
 ## 開發
 
 ```bash

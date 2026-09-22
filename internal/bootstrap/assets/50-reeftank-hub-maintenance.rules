@@ -1,0 +1,12 @@
+// ReefTank Hub may ask systemd to start one exact, root-owned maintenance
+// unit. The unit validates a structured request; no arbitrary command or unit
+// name is accepted through this rule.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "reefhub" &&
+        action.lookup("unit") == "reeftank-hub-maintenance.service" &&
+        action.lookup("verb") == "start") {
+        return polkit.Result.YES;
+    }
+});
+

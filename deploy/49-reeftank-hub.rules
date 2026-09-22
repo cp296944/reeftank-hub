@@ -1,0 +1,14 @@
+// polkit: let the reefhub service account restart its own units (needed after
+// an OTA binary swap) without a password. Nothing else is granted.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "reefhub") {
+        var unit = action.lookup("unit");
+        if (unit == "reeftank-hub.service" || unit == "reeftank-hub-rollback.service") {
+            var verb = action.lookup("verb");
+            if (verb == "restart" || verb == "start" || verb == "stop" || verb == "try-restart") {
+                return polkit.Result.YES;
+            }
+        }
+    }
+});

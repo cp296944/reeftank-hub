@@ -1,0 +1,7 @@
+[Unit]
+Description=ReefTank Hub - roll back after a failed update
+Documentation=https://github.com/cp296944/reeftank-hub
+
+[Service]
+Type=oneshot
+ExecStart=/opt/reeftank-hub/rollback.sh

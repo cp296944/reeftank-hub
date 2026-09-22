@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071821">
+  <title>ReefTank Hub</title>
+  <link rel="stylesheet" href="/hub-assets/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>海水缸控制中心</small></div></div>
+    <div class="top-status"><span class="dot"></span><span id="hub-status">系統啟動中</span><span id="version" class="version">—</span></div>
+  </header>
+  <main>
+    <section class="hero">
+      <div><p class="eyebrow">AQUARIUM OVERVIEW</p><h1>魚缸現在的狀況，<br>一眼就看清楚。</h1><p class="muted">首頁只讀取樹莓派快取，不會喚醒 K7 或滴定機。</p></div>
+      <div class="hero-reading"><span>水溫</span><strong>--<small>°C</small></strong><em>等待資料來源</em></div>
+    </section>
+
+    <section class="metric-grid" aria-label="摘要">
+      <article class="metric"><span>設備狀態</span><strong>建構中</strong><small>由 HA 管理及告警</small></article>
+      <article class="metric"><span>即時功率</span><strong>-- W</strong><small>等待 HA 連線</small></article>
+      <article class="metric"><span>本月用電</span><strong>-- kWh</strong><small>三組排插合計</small></article>
+      <article class="metric"><span>最近換水</span><strong>-- 天</strong><small>資料來自 Google 試算表</small></article>
+    </section>
+
+    <section class="section-head"><div><p class="eyebrow">MODULES</p><h2>設備與資料</h2></div><a href="/system/">系統狀態 →</a></section>
+    <section class="module-grid">
+      <a class="module ready" href="/K7/"><div class="icon">☀</div><div><h3>K7 燈具</h3><p>三燈連動 · 排程與手動控制</p></div><span>可使用</span></a>
+      <a class="module planned" href="/dosing/"><div class="icon">◫</div><div><h3>魔點滴定</h3><p>四泵頭 · 排程 · 校正 · 液量</p></div><span>建構中</span></a>
+      <a class="module planned" href="/power/"><div class="icon">ϟ</div><div><h3>電源監控</h3><p>18 路插座 · 即時與歷史用電</p></div><span>等待 HA</span></a>
+      <a class="module planned" href="/water/"><div class="icon">◉</div><div><h3>水質紀錄</h3><p>七項水質 · 換水 · 長期趨勢</p></div><span>等待同步</span></a>
+    </section>
+
+    <section id="bootstrap-card" class="notice hidden">
+      <div><strong>需要完成一次系統 Bootstrap</strong><p>安裝 BLE 與安全維護助手後，所有 Hub 元件即可從網頁 OTA。</p></div>
+      <code id="bootstrap-command"></code>
+    </section>
+  </main>
+  <footer>ReefTank Hub · Raspberry Pi</footer>
+  <script src="/hub-assets/app.js" defer></script>
+</body>
+</html>

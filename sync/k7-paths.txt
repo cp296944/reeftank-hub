@@ -1,0 +1,11 @@
+# Paths relative to the ReefTank Hub repository that are allowed to sync into
+# legacy repo pi-bridge/. Hub-only code must never be added here.
+internal/engine
+internal/httpapi
+internal/k7tcp
+internal/lamp
+internal/piapi
+internal/piweb
+internal/profiles
+internal/proxy
+internal/tally

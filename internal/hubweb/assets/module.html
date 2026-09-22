@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071821">
+  <title>{{TITLE}} · ReefTank Hub</title>
+  <link rel="stylesheet" href="/hub-assets/app.css">
+</head>
+<body data-module="{{MODULE}}">
+  <header class="topbar">
+    <a class="brand brand-link" href="/"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>返回系統首頁</small></div></a>
+    <nav class="nav"><a href="/K7/">K7</a><a href="/dosing/">滴定</a><a href="/power/">電源</a><a href="/water/">水質</a><a href="/system/">系統</a></nav>
+  </header>
+  <main class="module-page">
+    <p class="eyebrow">REEFTANK HUB / {{MODULE}}</p>
+    <h1>{{TITLE}}</h1>
+    <p class="lead">{{SUBTITLE}}</p>
+    <section id="module-placeholder" class="empty-state"><span>施工中</span><h2>模組骨架已建立</h2><p>{{DETAIL}}</p><a href="/">回到首頁</a></section>
+    <section id="module-content" class="module-content hidden"></section>
+    <section id="system-bootstrap" class="notice hidden"><div><strong>Bootstrap 尚未完成</strong><p>完成一次性系統整合後，Hub 相關服務即可由網頁 OTA。</p></div><code id="bootstrap-command"></code></section>
+  </main>
+  <script src="/hub-assets/app.js" defer></script>
+</body>
+</html>

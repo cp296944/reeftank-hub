@@ -1,0 +1,89 @@
+name: Sync K7 changes to legacy repository
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'internal/engine/**'
+      - 'internal/httpapi/**'
+      - 'internal/k7tcp/**'
+      - 'internal/lamp/**'
+      - 'internal/piapi/**'
+      - 'internal/piweb/**'
+      - 'internal/profiles/**'
+      - 'internal/proxy/**'
+      - 'internal/tally/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      K7_SYNC_TOKEN: ${{ secrets.K7_SYNC_TOKEN }}
+    steps:
+      - name: Explain missing cross-repo credential
+        if: env.K7_SYNC_TOKEN == ''
+        run: echo 'K7_SYNC_TOKEN is not configured; no legacy write was attempted.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out ReefTank Hub
+        if: env.K7_SYNC_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          path: hub
+
+      - name: Check out legacy K7 development branch
+        if: env.K7_SYNC_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: cp296944/k7-led-Raspberry-controller
+          ref: dev/pi-bridge
+          token: ${{ secrets.K7_SYNC_TOKEN }}
+          path: legacy
+
+      - name: Copy allowlisted K7 paths
+        if: env.K7_SYNC_TOKEN != ''
+        shell: bash
+        run: |
+          while IFS= read -r path; do
+            [[ -z "$path" || "$path" == \#* ]] && continue
+            target="legacy/pi-bridge/$path"
+            mkdir -p "$(dirname "$target")"
+            rsync -a --delete "hub/$path/" "$target/"
+          done < hub/sync/k7-paths.txt
+          find legacy/pi-bridge/internal -type f -name '*.go' -print0 | \
+            xargs -0 sed -i \
+              -e 's#github.com/cp296944/reeftank-hub#github.com/cp296944/k7-led-Raspberry-controller/pi-bridge#g' \
+              -e 's#reeftank_hub#pi_bridge#g'
+
+      - name: Verify legacy K7 build
+        if: env.K7_SYNC_TOKEN != ''
+        working-directory: legacy/pi-bridge
+        run: |
+          gofmt -w internal/engine internal/httpapi internal/k7tcp internal/lamp internal/piapi internal/piweb internal/profiles internal/proxy internal/tally
+          go test ./internal/engine ./internal/httpapi ./internal/k7tcp ./internal/piapi ./internal/piweb ./internal/profiles ./internal/tally
+
+      - name: Create synchronization pull request
+        if: env.K7_SYNC_TOKEN != ''
+        shell: bash
+        working-directory: legacy
+        run: |
+          if git diff --quiet; then
+            echo 'No K7 shared changes.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch="sync/reeftank-hub-${GITHUB_SHA::7}"
+          git config user.name 'ReefTank Hub Sync'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add pi-bridge/internal
+          git commit -m "pi-bridge: sync shared K7 changes from ReefTank Hub"
+          git push origin "$branch"
+          GH_TOKEN="$K7_SYNC_TOKEN" gh pr create \
+            --repo cp296944/k7-led-Raspberry-controller \
+            --base dev/pi-bridge \
+            --head "$branch" \
+            --title 'pi-bridge: sync shared K7 changes from ReefTank Hub' \
+            --body "Automated allowlist sync from ReefTank Hub commit ${GITHUB_SHA}. Review and merge normally; this workflow never writes directly to the legacy branch."

@@ -1,0 +1,6 @@
+# build artifacts — the binary is produced by CI and shipped via GitHub Releases
+/k7-pi-bridge
+/k7-pi-bridge.exe
+/dist/
+*.exe
+*.test

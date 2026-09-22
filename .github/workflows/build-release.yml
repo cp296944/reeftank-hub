@@ -1,0 +1,53 @@
+name: Build and release ReefTank Hub
+
+on:
+  push:
+    branches: [main]
+    tags: ['hub-v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - run: go vet ./cmd/reeftank-hub ./internal/bootstrap ./internal/equipment ./internal/hubweb
+      - run: GOOS=linux GOARCH=arm64 go build ./cmd/reeftank-hub
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/hub-v')
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build linux/arm64
+        shell: bash
+        run: |
+          mkdir -p dist
+          PKG=github.com/cp296944/reeftank-hub/internal/version
+          COMMIT="$(git rev-parse --short HEAD)"
+          DATE="$(date -u +%Y-%m-%d)"
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build \
+            -ldflags "-s -w -X ${PKG}.Version=${GITHUB_REF_NAME} -X ${PKG}.Commit=${COMMIT} -X ${PKG}.Date=${DATE}" \
+            -o dist/reeftank-hub-linux-arm64 ./cmd/reeftank-hub
+          cd dist
+          sha256sum reeftank-hub-linux-arm64 > SHA256SUMS
+          printf '{"version":"%s","commit":"%s","date":"%s","asset":"reeftank-hub-linux-arm64"}\n' \
+            "${GITHUB_REF_NAME}" "${COMMIT}" "${DATE}" > version.json
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/reeftank-hub-linux-arm64 dist/SHA256SUMS dist/version.json --generate-notes

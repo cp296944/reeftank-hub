@@ -38,7 +38,7 @@
 
 以下全部完成後，才向使用者提供實機 bootstrap 指令：
 
-- [ ] 新 repo CI 能測試及產生 `linux/arm64` binary。
+- [x] 新 repo CI 能測試及產生 `linux/arm64` binary（首次 main build 2026-09-22 通過）。
 - [ ] `hub-v0.1.0` release pipeline 實際演練成功。
 - [ ] 舊 K7 `pi-v1.1.0` 過渡版能備份並切換到 Hub repo。
 - [ ] `/opt/k7-pi-bridge/data` → `/opt/reeftank-hub/data` 遷移測試。
@@ -48,7 +48,8 @@
 
 ## 下一步
 
-- [ ] 建立 Hub GitHub Actions 與 release manifest。
+- [x] 建立 Hub GitHub Actions 與 release manifest。
+- [x] 建立 K7 allowlist 同步 workflow；未設定專用 Token 時確認為只讀跳過。
 - [ ] 完成 K7 共用路徑同步檢查及 PR workflow。
 - [ ] 完成舊 repo 過渡版。
 - [ ] 在隔離目錄演練 bootstrap／migration／rollback。

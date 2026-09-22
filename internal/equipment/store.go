@@ -23,11 +23,25 @@ type Device struct {
 	Critical     bool   `json:"critical"`
 }
 
+type PowerStrip struct {
+	ID                string `json:"id"`
+	DisplayName       string `json:"display_name"`
+	SlotStart         int    `json:"slot_start"`
+	SlotEnd           int    `json:"slot_end"`
+	LEDEntity         string `json:"led_entity"`
+	CurrentEntity     string `json:"current_entity"`
+	PowerEntity       string `json:"power_entity"`
+	TodayEnergyEntity string `json:"today_energy_entity"`
+	MonthEnergyEntity string `json:"month_energy_entity"`
+	OnSinceEntity     string `json:"on_since_entity"`
+}
+
 type Snapshot struct {
-	Schema    int       `json:"schema"`
-	Revision  int64     `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Devices   []Device  `json:"devices"`
+	Schema      int          `json:"schema"`
+	Revision    int64        `json:"revision"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	PowerStrips []PowerStrip `json:"power_strips"`
+	Devices     []Device     `json:"devices"`
 }
 
 type Store struct {
@@ -53,8 +67,16 @@ func Open(path string) (*Store, error) {
 	if err := json.Unmarshal(b, &s.data); err != nil {
 		return nil, fmt.Errorf("parse equipment map: %w", err)
 	}
+	normalized := normalize(&s.data)
 	if err := validate(s.data); err != nil {
 		return nil, fmt.Errorf("validate equipment map: %w", err)
+	}
+	if normalized {
+		s.data.Revision++
+		s.data.UpdatedAt = s.now().UTC()
+		if err := s.saveLocked(); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }
@@ -151,8 +173,24 @@ func (s *Store) saveLocked() error {
 }
 
 func validate(s Snapshot) error {
-	if s.Schema != 1 || len(s.Devices) != 18 {
-		return fmt.Errorf("expected schema 1 with 18 devices")
+	if s.Schema != 1 || len(s.PowerStrips) != 3 || len(s.Devices) != 18 {
+		return fmt.Errorf("expected schema 1 with 3 power strips and 18 devices")
+	}
+	stripIDs, covered := map[string]bool{}, map[int]bool{}
+	for _, strip := range s.PowerStrips {
+		if strip.ID == "" || strip.DisplayName == "" || stripIDs[strip.ID] || strip.SlotStart < 1 || strip.SlotEnd > 18 || strip.SlotStart > strip.SlotEnd {
+			return fmt.Errorf("invalid power strip %q", strip.ID)
+		}
+		for slot := strip.SlotStart; slot <= strip.SlotEnd; slot++ {
+			if covered[slot] {
+				return fmt.Errorf("power strip slot %d overlaps", slot)
+			}
+			covered[slot] = true
+		}
+		stripIDs[strip.ID] = true
+	}
+	if len(covered) != 18 {
+		return fmt.Errorf("power strips must cover all 18 slots")
 	}
 	ids, entities, slots := map[string]bool{}, map[string]bool{}, map[int]bool{}
 	for _, d := range s.Devices {
@@ -170,8 +208,17 @@ func validate(s Snapshot) error {
 	return nil
 }
 
+func normalize(s *Snapshot) bool {
+	if len(s.PowerStrips) != 0 {
+		return false
+	}
+	s.PowerStrips = defaultPowerStrips()
+	return true
+}
+
 func cloneSnapshot(in Snapshot) Snapshot {
 	out := in
+	out.PowerStrips = append([]PowerStrip(nil), in.PowerStrips...)
 	out.Devices = append([]Device(nil), in.Devices...)
 	sort.Slice(out.Devices, func(i, j int) bool { return out.Devices[i].Slot < out.Devices[j].Slot })
 	return out
@@ -189,5 +236,25 @@ func defaultSnapshot() Snapshot {
 	for i := range devices {
 		devices[i] = Device{ID: fmt.Sprintf("outlet_%02d", i+1), DisplayName: names[i], Slot: i + 1, SwitchEntity: ids[i], Critical: critical[i+1]}
 	}
-	return Snapshot{Schema: 1, Revision: 1, UpdatedAt: time.Now().UTC(), Devices: devices}
+	return Snapshot{Schema: 1, Revision: 1, UpdatedAt: time.Now().UTC(), PowerStrips: defaultPowerStrips(), Devices: devices}
+}
+
+func defaultPowerStrips() []PowerStrip {
+	makeStrip := func(id, name string, start, end int) PowerStrip {
+		prefix := "sensor.tp_link_power_strip_" + id
+		return PowerStrip{
+			ID: id, DisplayName: name, SlotStart: start, SlotEnd: end,
+			LEDEntity:         "switch.tp_link_power_strip_" + id + "_led",
+			CurrentEntity:     prefix + "_current",
+			PowerEntity:       prefix + "_current_consumption",
+			TodayEnergyEntity: prefix + "_today_s_consumption",
+			MonthEnergyEntity: prefix + "_this_month_s_consumption",
+			OnSinceEntity:     prefix + "_on_since",
+		}
+	}
+	return []PowerStrip{
+		makeStrip("3a31", "3A31 主機", 1, 6),
+		makeStrip("3f2d", "3F2D 副機", 7, 12),
+		makeStrip("bfb9", "BFB9 擴充", 13, 18),
+	}
 }

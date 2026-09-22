@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,6 +17,9 @@ func TestDefaultsAndSwapPersist(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := s.Snapshot()
+	if len(before.PowerStrips) != 3 || before.PowerStrips[0].DisplayName != "3A31 主機" || before.PowerStrips[2].SlotStart != 13 {
+		t.Fatalf("unexpected strips: %+v", before.PowerStrips)
+	}
 	if len(before.Devices) != 18 || before.Devices[5].DisplayName != "GMP30R" || before.Devices[10].DisplayName != "JNS蛋白機" {
 		t.Fatalf("unexpected defaults: %+v", before.Devices)
 	}
@@ -33,6 +37,27 @@ func TestDefaultsAndSwapPersist(t *testing.T) {
 	}
 	if reopened.Snapshot().Devices[3].SwitchEntity != b {
 		t.Fatal("assignment did not persist")
+	}
+}
+
+func TestOpenMigratesUngroupedSnapshot(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "equipment.json")
+	legacy := defaultSnapshot()
+	legacy.PowerStrips = nil
+	b, _ := json.Marshal(legacy)
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Snapshot().PowerStrips) != 3 {
+		t.Fatal("legacy equipment map was not grouped")
+	}
+	persisted, _ := os.ReadFile(p)
+	if !strings.Contains(string(persisted), `"power_strips"`) {
+		t.Fatal("group migration was not persisted")
 	}
 }
 

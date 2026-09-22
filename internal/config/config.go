@@ -49,6 +49,7 @@ type Config struct {
 	// Xiaoyu Weilai temperature source. The URL contains the device serial and
 	// therefore stays environment-only, just like the HA token.
 	XiaoyuURL string `json:"-"`
+	SheetsURL string `json:"-"`
 
 	// Ops.
 	BackupTarget string `json:"backup_target"` // rsync/scp dest, "" = off
@@ -163,6 +164,9 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("XIAOYU_URL"); v != "" {
 		cfg.XiaoyuURL = strings.TrimSpace(v)
 	}
+	if v := os.Getenv("GOOGLE_SHEETS_URL"); v != "" {
+		cfg.SheetsURL = strings.TrimSpace(v)
+	}
 }
 
 func (c Config) validate() error {
@@ -185,6 +189,12 @@ func (c Config) validate() error {
 		u, err := url.Parse(c.XiaoyuURL)
 		if err != nil || u.Scheme != "https" || u.Host == "" {
 			return fmt.Errorf("xiaoyu_url invalid (HTTPS URL required)")
+		}
+	}
+	if c.SheetsURL != "" {
+		u, err := url.Parse(c.SheetsURL)
+		if err != nil || u.Scheme != "https" || u.Host != "script.google.com" {
+			return fmt.Errorf("google_sheets_url invalid")
 		}
 	}
 	switch c.LogLevel {

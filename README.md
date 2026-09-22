@@ -52,6 +52,18 @@ HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
 保留最後成功值及延遲／過期狀態，並將歷史永久保存到 SQLite；首頁不透過 HA
 轉傳水溫。
 
+## Google 水質
+
+`GOOGLE_SHEETS_URL` 放在 root-only 環境檔，包含 Apps Script Web App URL 與
+key，不進 Git。Hub 每 30 分鐘同步最新資料，啟動時回補全歷史到 SQLite。
+水質新增採「寫入 Google → 重新讀回 → 更新本機鏡射」，Google Sheet 維持主資料。
+
+## 魔點四頭滴定
+
+目前提供完整軟體模擬模式：四泵頭、校正、容器／液量、手動滴定、每日總量、
+分次與星期排程、讀回確認、操作稽核及故障注入。所有 BLE capability 明確標成
+尚未實機驗證，避免模擬成功被誤認為設備已執行。
+
 Hub 首頁右上角集中管理檢查更新、立即 OTA、自動更新與版本歷程；K7
 頁面只保留燈具本身的語言、監視與設定。電源頁透過 HA API 顯示三條
 排插的即時狀態、18 路明細、總能耗及 7 天趨勢，控制操作只允許目前

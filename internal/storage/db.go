@@ -92,6 +92,37 @@ func (d *DB) RecordTemperature(ctx context.Context, value float64, sourceTime, r
 	return err
 }
 
+func (d *DB) ReplaceWaterQuality(ctx context.Context, at time.Time, values map[string]float64) error {
+	tx, e := d.db.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	for metric, value := range values {
+		if _, e = tx.ExecContext(ctx, `INSERT INTO water_quality(metric,value,unit,source_time,received_time) VALUES(?,?,?,?,?) ON CONFLICT(metric,source_time) DO UPDATE SET value=excluded.value,received_time=excluded.received_time`, metric, value, "", at.UTC().Format(time.RFC3339Nano), time.Now().UTC().Format(time.RFC3339Nano)); e != nil {
+			return e
+		}
+	}
+	return tx.Commit()
+}
+func (d *DB) WaterHistory(ctx context.Context) (map[string][]map[string]any, error) {
+	rows, e := d.db.QueryContext(ctx, `SELECT metric,value,source_time FROM water_quality ORDER BY source_time`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := map[string][]map[string]any{}
+	for rows.Next() {
+		var m, t string
+		var v float64
+		if e = rows.Scan(&m, &v, &t); e != nil {
+			return nil, e
+		}
+		out[m] = append(out[m], map[string]any{"value": v, "time": t})
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) TemperatureCount(ctx context.Context) (int64, error) {
 	var n int64
 	err := d.db.QueryRowContext(ctx, `SELECT count(*) FROM temperature_samples`).Scan(&n)

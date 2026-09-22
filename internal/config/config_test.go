@@ -46,6 +46,18 @@ func TestXiaoyuURLIsEnvironmentOnly(t *testing.T) {
 	}
 }
 
+func TestSheetsURLIsEnvironmentOnly(t *testing.T) {
+	t.Setenv("GOOGLE_SHEETS_URL", "https://script.google.com/macros/s/example/exec?key=secret")
+	cfg, e := Load(nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, _ := json.Marshal(cfg)
+	if cfg.SheetsURL == "" || strings.Contains(string(b), "secret") {
+		t.Fatal("Sheets secret missing or serialized")
+	}
+}
+
 func TestRejectsInvalidHomeAssistantURL(t *testing.T) {
 	t.Setenv("HA_URL", "file:///etc/passwd")
 	if _, err := Load(nil); err == nil {

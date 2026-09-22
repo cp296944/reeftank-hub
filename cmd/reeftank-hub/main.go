@@ -24,6 +24,7 @@ import (
 
 	"github.com/cp296944/reeftank-hub/internal/bootstrap"
 	"github.com/cp296944/reeftank-hub/internal/config"
+	"github.com/cp296944/reeftank-hub/internal/dosing"
 	"github.com/cp296944/reeftank-hub/internal/engine"
 	"github.com/cp296944/reeftank-hub/internal/equipment"
 	"github.com/cp296944/reeftank-hub/internal/homeassistant"
@@ -35,6 +36,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/profiles"
 	"github.com/cp296944/reeftank-hub/internal/proxy"
 	"github.com/cp296944/reeftank-hub/internal/ringlog"
+	"github.com/cp296944/reeftank-hub/internal/sheets"
 	"github.com/cp296944/reeftank-hub/internal/storage"
 	"github.com/cp296944/reeftank-hub/internal/tally"
 	"github.com/cp296944/reeftank-hub/internal/temperature"
@@ -110,11 +112,17 @@ func run(args []string) error {
 	haSync := homeassistant.NewSyncer(haClient, hubDB, homeassistant.TrackedEntities(equipmentStore.Snapshot()))
 	haAPI := &homeassistant.API{Client: haClient, Equipment: equipmentStore, Sync: haSync}
 	temperaturePoller := temperature.New(cfg.XiaoyuURL, hubDB)
+	sheetsSync := sheets.New(cfg.SheetsURL, hubDB)
+	dosingStore, err := dosing.Open(filepath.Join(cfg.DataDir, "dosing.json"))
+	if err != nil {
+		return fmt.Errorf("open dosing state: %w", err)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go haSync.Run(ctx)
 	go temperaturePoller.Run(ctx)
+	go sheetsSync.Run(ctx)
 	go func() {
 		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 		defer cancel()
@@ -173,6 +181,7 @@ func run(args []string) error {
 	}
 
 	lampConn := lamp.New(cfg.LampHost, cfg.LampPort)
+	lampConn.SetDemandOnly(true)
 	fx := piapi.NewEffectsStore(cfg.DataDir)
 
 	// Shared lamp-write counter (今日上傳次數). Persists across restart / OTA so
@@ -257,6 +266,7 @@ func run(args []string) error {
 	})
 	hubHandler := hubweb.New(hubweb.Options{
 		K7: uiHandler, Version: version.Version, InstallRoot: cfg.InstallRoot,
+		OnK7Access: func() { lampConn.Touch(2 * time.Minute) },
 	})
 
 	started := time.Now()
@@ -271,8 +281,18 @@ func run(args []string) error {
 	go diag.run(ctx, time.Hour)
 
 	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, hubDB.Register),
+		Addr: cfg.Listen,
+		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, sheetsSync.Register, dosingStore.Register, hubDB.Register, func(mux *http.ServeMux) {
+			mux.HandleFunc("POST /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
+				lampConn.Touch(2 * time.Minute)
+				active, until := lampConn.DemandActive()
+				writeJSON(w, http.StatusOK, map[string]any{"active": active, "until": until})
+			})
+			mux.HandleFunc("GET /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
+				active, until := lampConn.DemandActive()
+				writeJSON(w, http.StatusOK, map[string]any{"active": active, "until": until})
+			})
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

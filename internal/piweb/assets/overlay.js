@@ -837,3 +837,7 @@
       else start();
     });
 })();
+// Keep the K7 transport awake only while this page is open. The lamp itself
+// continues its native schedule when the Hub connection goes dormant.
+fetch('/api/hub/k7/session',{method:'POST'}).catch(()=>{});
+setInterval(()=>fetch('/api/hub/k7/session',{method:'POST'}).catch(()=>{}),45000);

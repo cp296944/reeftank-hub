@@ -22,7 +22,7 @@
       <article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article>
       <article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article>
       <article class="metric"><span>本月用電</span><strong id="home-month">-- kWh</strong><small>三組排插合計</small></article>
-      <article class="metric"><span>最近換水</span><strong>-- 天</strong><small>資料來自 Google 試算表</small></article>
+      <article class="metric"><span>最近測水</span><strong id="home-water">--</strong><small>資料來自 Google 試算表</small></article>
     </section>
 
     <section class="section-head"><div><p class="eyebrow">LIFE SUPPORT</p><h2>生命維持設備</h2></div><a href="/power/">完整電源監控 →</a></section>
@@ -31,9 +31,9 @@
     <section class="section-head"><div><p class="eyebrow">MODULES</p><h2>設備與資料</h2></div><a href="/system/">系統狀態 →</a></section>
     <section class="module-grid">
       <a class="module ready" href="/K7/"><div class="icon">☀</div><div><h3>K7 燈具</h3><p>三燈連動 · 排程與手動控制</p></div><span>可使用</span></a>
-      <a class="module planned" href="/dosing/"><div class="icon">◫</div><div><h3>魔點滴定</h3><p>四泵頭 · 排程 · 校正 · 液量</p></div><span>建構中</span></a>
+      <a class="module ready" href="/dosing/"><div class="icon">◫</div><div><h3>魔點滴定</h3><p>四泵頭 · 排程 · 校正 · 液量</p></div><span id="module-dosing">模擬模式</span></a>
       <a class="module ready" href="/power/"><div class="icon">ϟ</div><div><h3>電源監控</h3><p>18 路插座 · 即時與歷史用電</p></div><span id="module-power">連線中</span></a>
-      <a class="module planned" href="/water/"><div class="icon">◉</div><div><h3>水質紀錄</h3><p>七項水質 · 換水 · 長期趨勢</p></div><span>等待同步</span></a>
+      <a class="module ready" href="/water/"><div class="icon">◉</div><div><h3>水質紀錄</h3><p>七項水質 · 換水 · 長期趨勢</p></div><span id="module-water">等待同步</span></a>
       <a class="module ready" href="/system/"><div class="icon">🌡</div><div><h3>獨立水溫</h3><p>小魚未來雲端 · 本機長期保存</p></div><span id="module-temperature">連線中</span></a>
     </section>
 

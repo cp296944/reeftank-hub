@@ -9,6 +9,7 @@
 package lamp
 
 import (
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -31,6 +32,25 @@ type Lamp struct {
 	consecFail int // current consecutive-failure streak (0 when healthy)
 
 	onReconnect func() // fired (async) when an op succeeds after a failure streak
+	demandOnly  bool
+	activeUntil time.Time
+}
+
+var ErrDormant = errors.New("K7 connection dormant until the K7 page is opened")
+
+func (l *Lamp) SetDemandOnly(on bool) { l.mu.Lock(); l.demandOnly = on; l.mu.Unlock() }
+func (l *Lamp) Touch(d time.Duration) {
+	if d <= 0 {
+		d = 2 * time.Minute
+	}
+	l.mu.Lock()
+	l.activeUntil = time.Now().Add(d)
+	l.mu.Unlock()
+}
+func (l *Lamp) DemandActive() (bool, time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return !l.demandOnly || time.Now().Before(l.activeUntil), l.activeUntil
 }
 
 func New(host string, port int) *Lamp {
@@ -77,6 +97,10 @@ func (l *Lamp) Health() Health {
 
 func (l *Lamp) do(name string, timeout time.Duration, fn func(k7tcp.Client) error) error {
 	l.mu.Lock()
+	if l.demandOnly && time.Now().After(l.activeUntil) {
+		l.mu.Unlock()
+		return ErrDormant
+	}
 	l.ops++
 	recovered := false
 	err := fn(l.client(timeout))

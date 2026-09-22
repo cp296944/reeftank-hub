@@ -67,28 +67,6 @@
     var wrap = el('span', { id: 'k7pi-hdr' });
     wrap.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
 
-    // update button + inline status
-    var updBtn = el('button', { type: 'button', textContent: dict['Check for updates'] || 'Check for updates' });
-    styleBtn(updBtn);
-    var status = el('span', { id: 'k7pi-upd' });
-    status.style.cssText = 'font-size:0.78rem;color:var(--muted,#8a95a3)';
-    updBtn.onclick = function () { checkUpdate(status, wrap); };
-
-    // auto-update toggle (persisted server-side)
-    var autoLbl = el('label', { title: 'Auto-apply updates' });
-    autoLbl_style(autoLbl);
-    var autoCb = el('input', { type: 'checkbox' });
-    autoCb.onchange = function () {
-      fetch('/api/update/config', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auto_update: autoCb.checked })
-      }).catch(function () {});
-    };
-    autoLbl.appendChild(autoCb);
-    autoLbl.appendChild(document.createTextNode(dict['Auto'] || 'Auto'));
-    fetch('/api/update/status').then(function (r) { return r.json(); })
-      .then(function (d) { autoCb.checked = !!d.auto_update; }).catch(function () {});
-
     // language dropdown
     var sel = el('select', { id: 'k7pi-lang', title: 'Language / 語言' });
     sel.style.cssText =
@@ -114,9 +92,6 @@
     styleBtn(gear);
     gear.onclick = openSettings;
 
-    wrap.appendChild(updBtn);
-    wrap.appendChild(autoLbl);
-    wrap.appendChild(status);
     wrap.appendChild(sel);
     wrap.appendChild(mon);
     wrap.appendChild(gear);
@@ -194,17 +169,6 @@
       var lat = field(L('Latitude') || 'Latitude', inp(d.location.latitude, '110px'));
       var lon = field(L('Longitude') || 'Longitude', inp(d.location.longitude, '110px'));
 
-      section(L('Updates') || 'Updates');
-      var chSel = el('select');
-      chSel.style.cssText = devSel.style.cssText;
-      ['stable', 'prerelease'].forEach(function (c) {
-        var op = el('option', { value: c, textContent: c });
-        if (c === d.update.channel) op.selected = true;
-        chSel.appendChild(op);
-      });
-      field(L('Channel') || 'Channel', chSel);
-      note(L('Current') + ': ' + d.update.current + '  ·  ' + d.update.repo);
-
       section(L('Smooth Ramp') || 'Smooth Ramp');
       var rampMin = inp(10, '90px'); rampMin.type = 'number'; rampMin.min = 2; rampMin.max = 60;
       field(L('Send every (min)') || '送訊號間隔(分)', rampMin);
@@ -218,8 +182,7 @@
         saveBtn.disabled = true; msg.textContent = '…'; msg.style.color = 'var(--muted,#93a1af)';
         var lampBody = { host: host.value.trim(), port: parseInt(port.value, 10) || d.lamp.port, device: devSel.value };
         var setupBody = {
-          location: { timezone: tz.value.trim(), latitude: parseFloat(lat.value), longitude: parseFloat(lon.value) },
-          update: { channel: chSel.value }
+          location: { timezone: tz.value.trim(), latitude: parseFloat(lat.value), longitude: parseFloat(lon.value) }
         };
         var rampBody = { interval_min: parseInt(rampMin.value, 10) || 10 };
         Promise.all([
@@ -849,7 +812,7 @@
       // controls, and a transient Chart.js hiccup must not stop the value table.
       // Keep retrying every step until it has taken hold (or ~15s elapses).
       var steps = [retranslateAll, mountHeaderControls, mountWifi, mountWrites, mountChecksPlaceholder,
-                   tuneChartAxis, mountValueTable, mountVersionChangelog, installExplicitApply];
+                   tuneChartAxis, mountValueTable, installExplicitApply];
       var run = function () {
         steps.forEach(function (fn) { try { fn(); } catch (e) { /* retry next tick */ } });
       };

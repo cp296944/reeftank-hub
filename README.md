@@ -45,6 +45,11 @@ HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
 `config.json`、Hub 資料備份或 Git repository。環境變數名稱為 `HA_URL` 與
 `HA_TOKEN`；應使用專屬 HA 使用者所建立的 Token。
 
+Hub 首頁右上角集中管理檢查更新、立即 OTA、自動更新與版本歷程；K7
+頁面只保留燈具本身的語言、監視與設定。電源頁透過 HA API 顯示三條
+排插的即時狀態、18 路明細、總能耗及 7 天趨勢，控制操作只允許目前
+設備映射中的插座與三條排插 LED。
+
 ## 開發
 
 ```bash

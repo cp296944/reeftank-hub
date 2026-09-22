@@ -45,10 +45,17 @@ type Snapshot struct {
 }
 
 type Store struct {
-	mu   sync.RWMutex
-	path string
-	data Snapshot
-	now  func() time.Time
+	mu       sync.RWMutex
+	path     string
+	data     Snapshot
+	now      func() time.Time
+	onChange func(Snapshot)
+}
+
+func (s *Store) SetOnChange(fn func(Snapshot)) {
+	s.mu.Lock()
+	s.onChange = fn
+	s.mu.Unlock()
 }
 
 func Open(path string) (*Store, error) {
@@ -125,6 +132,7 @@ func (s *Store) Assign(id, switchEntity string) (Snapshot, error) {
 	if err := s.saveLocked(); err != nil {
 		return Snapshot{}, err
 	}
+	s.notifyLocked()
 	return cloneSnapshot(s.data), nil
 }
 
@@ -148,9 +156,16 @@ func (s *Store) Rename(id, displayName string) (Snapshot, error) {
 		if err := s.saveLocked(); err != nil {
 			return Snapshot{}, err
 		}
+		s.notifyLocked()
 		return cloneSnapshot(s.data), nil
 	}
 	return Snapshot{}, fmt.Errorf("unknown equipment %q", id)
+}
+
+func (s *Store) notifyLocked() {
+	if s.onChange != nil {
+		s.onChange(cloneSnapshot(s.data))
+	}
 }
 
 func (s *Store) saveLocked() error {

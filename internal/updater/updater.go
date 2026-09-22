@@ -53,6 +53,9 @@ type Options struct {
 	HTTPClient  *http.Client
 	// RestartFunc runs the service restart. Default: `systemctl restart reeftank-hub`.
 	RestartFunc func(ctx context.Context) error
+	// PreApply runs after download/checksum verification and before the release
+	// symlink is changed. ReefTank Hub uses it for an SQLite snapshot.
+	PreApply func(ctx context.Context, targetTag string) error
 }
 
 type Release struct {
@@ -172,6 +175,11 @@ func (u *Updater) Apply(ctx context.Context, rel *Release) error {
 	got := sha256.Sum256(bin)
 	if hex.EncodeToString(got[:]) != want {
 		return fmt.Errorf("updater: sha256 mismatch for %s", assetName)
+	}
+	if u.o.PreApply != nil {
+		if err := u.o.PreApply(ctx, rel.Tag); err != nil {
+			return fmt.Errorf("updater: pre-apply backup: %w", err)
+		}
 	}
 
 	relDir := u.dir(filepath.Join("releases", rel.Tag))

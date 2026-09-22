@@ -26,6 +26,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/config"
 	"github.com/cp296944/reeftank-hub/internal/engine"
 	"github.com/cp296944/reeftank-hub/internal/equipment"
+	"github.com/cp296944/reeftank-hub/internal/homeassistant"
 	"github.com/cp296944/reeftank-hub/internal/httpapi"
 	"github.com/cp296944/reeftank-hub/internal/hubweb"
 	"github.com/cp296944/reeftank-hub/internal/lamp"
@@ -34,6 +35,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/profiles"
 	"github.com/cp296944/reeftank-hub/internal/proxy"
 	"github.com/cp296944/reeftank-hub/internal/ringlog"
+	"github.com/cp296944/reeftank-hub/internal/storage"
 	"github.com/cp296944/reeftank-hub/internal/tally"
 	"github.com/cp296944/reeftank-hub/internal/updater"
 	"github.com/cp296944/reeftank-hub/internal/version"
@@ -90,9 +92,52 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("equipment map: %w", err)
 	}
+	hubDB, err := storage.Open(filepath.Join(cfg.DataDir, "reeftank-hub.db"))
+	if err != nil {
+		return fmt.Errorf("open Hub database: %w", err)
+	}
+	defer hubDB.Close()
+	if err := hubDB.SyncEquipment(context.Background(), equipmentStore.Snapshot()); err != nil {
+		return fmt.Errorf("store equipment map: %w", err)
+	}
+	equipmentStore.SetOnChange(func(snap equipment.Snapshot) {
+		if err := hubDB.SyncEquipment(context.Background(), snap); err != nil {
+			slog.Warn("store equipment map", "err", err)
+		}
+	})
+	haClient := homeassistant.New(cfg.HAURL, cfg.HAToken)
+	haSync := homeassistant.NewSyncer(haClient, hubDB, homeassistant.TrackedEntities(equipmentStore.Snapshot()))
+	haAPI := &homeassistant.API{Client: haClient, Equipment: equipmentStore, Sync: haSync}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go haSync.Run(ctx)
+	go func() {
+		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
+		defer cancel()
+		if err := haSync.Backfill(backfillCtx, 3650); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Warn("HA history backfill failed", "err", err)
+		}
+	}()
+	backupDB := func() {
+		dest := filepath.Join(cfg.DataDir, "backups", "automatic-"+time.Now().UTC().Format("20060102")+".db")
+		if err := hubDB.Backup(dest); err != nil {
+			slog.Warn("database backup failed", "err", err)
+		}
+	}
+	backupDB()
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				backupDB()
+			}
+		}
+	}()
 
 	var healthy atomic.Bool
 	healthy.Store(true)
@@ -102,6 +147,9 @@ func run(args []string) error {
 		Channel:     cfg.UpdateChannel,
 		InstallRoot: cfg.InstallRoot,
 		CurrentTag:  version.Version,
+		PreApply: func(_ context.Context, targetTag string) error {
+			return hubDB.Backup(filepath.Join(cfg.DataDir, "backups", "pre-ota-"+targetTag+"-"+time.Now().UTC().Format("20060102T150405Z")+".db"))
+		},
 	})
 	up.ConfirmAfterStart(ctx, version.Version, 45*time.Second, func() bool { return healthy.Load() })
 	cfgPath := os.Getenv("REEFTANK_CONFIG")
@@ -221,7 +269,7 @@ func run(args []string) error {
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register),
+		Handler:           routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, hubDB.Register),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

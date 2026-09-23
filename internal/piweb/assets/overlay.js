@@ -64,6 +64,22 @@
     var anchor = document.getElementById('versionChip') || (bar && bar.querySelector('h1'));
     if (!bar || !anchor) return false;
 
+    if (!document.getElementById('hub-global-topbar')) {
+      var global = el('div', { id: 'hub-global-topbar' });
+      global.style.cssText = 'height:60px;padding:0 24px;display:flex;align-items:center;gap:12px;background:#0d1215;color:#e8eff2;border-bottom:1px solid #2a363c;font:14px system-ui;position:relative;z-index:20';
+      var home = el('a', { href: '/', textContent: 'R' });
+      home.style.cssText = 'display:grid;place-items:center;width:38px;height:38px;border:1px solid #287482;border-radius:6px;color:#20c7e8;text-decoration:none;font-weight:800;background:#14252b';
+      var title = el('div'); title.innerHTML = '<strong style="display:block">ReefTank Hub</strong><small style="color:#8b9aa1">K7 燈具 · 點選標誌回首頁</small>';
+      var spacer = el('span'); spacer.style.flex = '1';
+      var state = el('span', { textContent: '● Hub 正常運作' }); state.style.color = '#62d8e8';
+      var ver = el('span', { textContent: '—' }); ver.style.cssText = 'padding:5px 9px;border:1px solid #2a363c;border-radius:6px;color:#aebcc2';
+      global.appendChild(home); global.appendChild(title); global.appendChild(spacer); global.appendChild(state); global.appendChild(ver);
+      document.body.insertBefore(global, document.body.firstChild);
+      fetch('/api/version').then(function(r){return r.json();}).then(function(v){ver.textContent=v.version||'—';}).catch(function(){state.textContent='● Hub 狀態異常';state.style.color='#ff7070';});
+    }
+    var legacyVersion = document.getElementById('versionChip');
+    if (legacyVersion) legacyVersion.style.display = 'none';
+
     var wrap = el('span', { id: 'k7pi-hdr' });
     wrap.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
 
@@ -842,9 +858,9 @@
 (()=>{
   const box=document.createElement('div');
   box.id='hub-k7-link';
-  box.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;display:flex;align-items:center;gap:8px;padding:9px 11px;background:#10191df2;border:1px solid #33464d;border-radius:8px;color:#dcebed;font:12px system-ui;box-shadow:0 8px 28px #0008';
+  box.style.cssText='display:inline-flex;align-items:center;gap:7px;margin-left:7px;padding:4px 8px;background:#10191d;border:1px solid #33464d;border-radius:6px;color:#dcebed;font:12px system-ui';
   box.innerHTML='<span id="hub-k7-dot" style="width:8px;height:8px;border-radius:50%;background:#7b8589"></span><span id="hub-k7-text">K7 休眠中</span><button id="hub-k7-connect">連線燈具</button><button id="hub-k7-sleep" style="display:none">中斷</button>';
-  document.body.append(box);
+  const read=document.getElementById('readBtn');(read&&read.parentNode?read.parentNode:document.body).insertBefore(box,read?read.nextSibling:null);
   const text=box.querySelector('#hub-k7-text'),dot=box.querySelector('#hub-k7-dot'),connect=box.querySelector('#hub-k7-connect'),sleep=box.querySelector('#hub-k7-sleep');
   let keepAlive=0;
   const paint=d=>{const connected=!!d.connected;dot.style.background=connected?'#3ed6a4':d.active?'#efbd66':'#7b8589';text.textContent=connected?'K7 已連線':d.active?'K7 無回應':'K7 休眠中';connect.textContent=connected?'重新連線':'連線燈具';sleep.style.display=d.active?'inline-block':'none'};

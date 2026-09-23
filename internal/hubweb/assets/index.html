@@ -17,15 +17,16 @@
     <section class="section-head compact"><div><p class="eyebrow">WATER PARAMETERS</p><h2>最新水質</h2></div><a href="/water/">紀錄與歷史 →</a></section>
     <section id="water-dashboard" class="water-dashboard"><article class="parameter-card"><span>載入中</span></article></section>
 
-    <section class="metric-grid" aria-label="摘要">
-      <article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article>
-      <article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article>
-      <article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article>
-      <article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article>
+    <section class="section-head"><div><p class="eyebrow">ENERGY MANAGER</p><h2>能源總管</h2></div><a href="/power/">完整電源監控 →</a></section>
+    <section class="energy-manager">
+      <div class="metric-grid energy-summary" aria-label="能源摘要">
+        <article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article>
+        <article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article>
+        <article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article>
+        <article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article>
+      </div>
+      <div id="life-support" class="metric-grid energy-devices"><article class="metric"><span>設備狀態</span><strong>讀取中</strong><small>等待 HA 即時快取</small></article></div>
     </section>
-
-    <section class="section-head"><div><p class="eyebrow">LIFE SUPPORT</p><h2>生命維持設備</h2></div><a href="/power/">完整電源監控 →</a></section>
-    <section id="life-support" class="metric-grid"><article class="metric"><span>設備狀態</span><strong>讀取中</strong><small>等待 HA 即時快取</small></article></section>
 
     <section class="section-head"><div><p class="eyebrow">MODULES</p><h2>設備與資料</h2></div><a href="/system/">系統狀態 →</a></section>
     <section class="module-grid">

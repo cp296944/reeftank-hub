@@ -41,6 +41,24 @@
     </section>
   </main>
   <footer>ReefTank Hub · Raspberry Pi</footer>
+  <div id="update-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="update-title">
+    <section class="update-panel">
+      <div class="update-panel-head"><div><p class="eyebrow">SYSTEM UPDATE</p><h2 id="update-title">系統更新</h2></div><button id="update-close" class="update-close" type="button" aria-label="關閉">×</button></div>
+      <div class="update-target"><span>更新版本</span><strong id="update-target">—</strong><time id="update-elapsed">00:00</time></div>
+      <div class="update-progress"><i id="update-progress-bar"></i></div>
+      <ol id="update-steps" class="update-steps">
+        <li data-stage="prepare">確認更新套件</li><li data-stage="download">下載與驗證</li><li data-stage="install">備份並安裝</li><li data-stage="restart">重新啟動服務</li><li data-stage="health">版本與健康檢查</li>
+      </ol>
+      <p id="update-message" class="update-message">等待開始</p>
+      <div class="update-actions"><button id="update-retry" class="top-button hidden" type="button">重新檢查</button><button id="update-done" class="top-button hidden" type="button">完成並重新載入</button></div>
+    </section>
+  </div>
+  <div id="history-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="history-title">
+    <section class="update-panel history-panel">
+      <div class="update-panel-head"><div><p class="eyebrow">RELEASE HISTORY</p><h2 id="history-title">版本更新紀錄</h2></div><button id="history-close" class="update-close" type="button" aria-label="關閉">×</button></div>
+      <div id="history-list" class="history-list"><p class="muted">讀取中…</p></div>
+    </section>
+  </div>
   <script src="/hub-assets/app.js" defer></script>
 </body>
 </html>

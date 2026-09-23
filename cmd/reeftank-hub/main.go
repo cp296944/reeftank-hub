@@ -432,6 +432,9 @@ func resolveTimezone(name string) (*time.Location, bool) {
 
 func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *atomic.Bool, ui http.Handler, extra ...func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
+	var updateRunning atomic.Bool
+	var updateStateMu sync.RWMutex
+	updateState := map[string]any{"running": false}
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -556,16 +559,27 @@ func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *
 			})
 			return
 		}
+		if !updateRunning.CompareAndSwap(false, true) {
+			updateStateMu.RLock()
+			defer updateStateMu.RUnlock()
+			writeJSON(w, http.StatusConflict, map[string]any{"error": "已有更新正在下載或安裝，請勿重複執行", "progress": updateState})
+			return
+		}
 
 		rel, err := up.Check(r.Context())
 		if err != nil {
+			updateRunning.Store(false)
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
 			return
 		}
 		if rel == nil {
+			updateRunning.Store(false)
 			writeJSON(w, http.StatusOK, map[string]any{"applied": false, "reason": "up to date"})
 			return
 		}
+		updateStateMu.Lock()
+		updateState = map[string]any{"running": true, "stage": "download", "target": rel.Tag, "started_at": time.Now()}
+		updateStateMu.Unlock()
 		slog.Info("update apply requested via API", "tag", rel.Tag, "requested", in.Tag, "remote", r.RemoteAddr)
 		// Respond before the restart cuts the connection.
 		writeJSON(w, http.StatusAccepted, map[string]any{"applying": rel.Tag, "requested": in.Tag})
@@ -573,10 +587,19 @@ func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *
 			f.Flush()
 		}
 		go func() {
+			defer updateRunning.Store(false)
 			if err := up.Apply(context.Background(), rel); err != nil {
 				slog.Error("update apply failed", "err", err)
+				updateStateMu.Lock()
+				updateState = map[string]any{"running": false, "stage": "failed", "target": rel.Tag, "error": err.Error(), "finished_at": time.Now()}
+				updateStateMu.Unlock()
 			}
 		}()
+	})
+	mux.HandleFunc("GET /api/update/progress", func(w http.ResponseWriter, r *http.Request) {
+		updateStateMu.RLock()
+		defer updateStateMu.RUnlock()
+		writeJSON(w, http.StatusOK, updateState)
 	})
 
 	// Everything else — the shared UI (with the pi-bridge overlay), /api/version,

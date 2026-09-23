@@ -72,9 +72,11 @@ type Updater struct {
 
 func New(o Options) *Updater {
 	if o.HTTPClient == nil {
-		// Release binaries grew after SQLite was added. Slow Raspberry Pi / GitHub
-		// links can legitimately need more than 30 seconds for a verified download.
-		o.HTTPClient = &http.Client{Timeout: 5 * time.Minute}
+		// GitHub release downloads can be extremely slow on the aquarium Pi. The
+		// arm64 binary is >10 MiB, and real installations have taken longer than
+		// five minutes. Keep a generous per-attempt deadline; download() retries
+		// transient failures before reporting an OTA failure.
+		o.HTTPClient = &http.Client{Timeout: 30 * time.Minute}
 	}
 	if o.Channel == "" {
 		o.Channel = "stable"
@@ -236,16 +238,36 @@ func (u *Updater) ConfirmAfterStart(ctx context.Context, runningTag string, grac
 }
 
 func (u *Updater) download(ctx context.Context, url string) ([]byte, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	resp, err := u.o.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("updater: GET %s: %w", url, err)
+	var last error
+	for attempt := 1; attempt <= 3; attempt++ {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		resp, err := u.o.HTTPClient.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+			_ = resp.Body.Close()
+			if readErr == nil {
+				return body, nil
+			}
+			last = readErr
+		} else if err != nil {
+			last = err
+		} else {
+			last = fmt.Errorf("HTTP %d", resp.StatusCode)
+			_ = resp.Body.Close()
+		}
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("updater: GET %s: %w", url, ctx.Err())
+		}
+		slog.Warn("updater: download attempt failed", "attempt", attempt, "err", last)
+		if attempt < 3 {
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("updater: GET %s: %w", url, ctx.Err())
+			case <-time.After(time.Duration(attempt) * 2 * time.Second):
+			}
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("updater: GET %s: HTTP %d", url, resp.StatusCode)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	return nil, fmt.Errorf("updater: GET %s after 3 attempts: %w", url, last)
 }
 
 func systemctlRestart(ctx context.Context) error {

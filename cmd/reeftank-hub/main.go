@@ -516,7 +516,7 @@ func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *
 							continue
 						}
 						out = append(out, map[string]any{
-							"tag": x.TagName, "name": x.Name, "notes": x.Body,
+							"tag": x.TagName, "name": x.Name, "notes": conciseReleaseNotes(x.TagName, x.Body),
 							"published_at": x.PublishedAt, "prerelease": x.Prerelease, "url": x.HTMLURL,
 						})
 					}
@@ -659,6 +659,34 @@ func logRequests(next http.Handler) http.Handler {
 		slog.Debug("http", "method", r.Method, "path", r.URL.Path,
 			"remote", r.RemoteAddr, "dur", time.Since(start).String())
 	})
+}
+
+func conciseReleaseNotes(tag, fallback string) string {
+	notes := map[string]string{
+		"hub-v0.1.0": "建立 ReefTank Hub 過渡架構與 Bootstrap 安裝流程，保留既有 K7 資料、服務與回滾點，並奠定首頁、模組路由、OTA 更新及樹莓派集中管理的基礎。",
+		"hub-v0.2.0": "完成首頁、K7、滴定、電源與系統頁面骨架，加入 Home Assistant 即時資料介面、設備對應、SQLite 儲存，以及可從網頁操作的 OTA 更新與健康檢查。",
+		"hub-v0.2.1": "補強 Bootstrap 安裝與升級相容性，改善既有 K7 系統轉移、資料目錄權限、服務啟動及失敗回滾，讓舊架構可以安全過渡到 ReefTank Hub。",
+		"hub-v0.2.2": "修正樹莓派安裝後的服務與路由問題，強化版本檢查、備份及回復流程，降低首次 Bootstrap 或 OTA 過程中因環境差異造成的啟動失敗。",
+		"hub-v0.2.3": "改善部署腳本與系統服務整合，補上必要的權限及錯誤處理，確保 K7 控制仍可運作，同時讓 Hub 能穩定接管首頁與後續模組。",
+		"hub-v0.4.0": "整合 Home Assistant 電源資料、三組排插與設備控制，加入本機歷史資料保存、水溫來源、海水缸水質資料匯入，以及滴定機模擬介面的第一版。",
+		"hub-v0.5.0": "重整 Hub 首頁與專業儀表板風格，加入水質、水溫、能源摘要和模組入口，並將 OTA 檢查、更新操作及版本資訊集中到全站頂端。",
+		"hub-v0.5.1": "改善 OTA 操作流程，加入可視化更新階段、錯誤訊息、重新檢查及服務重啟監控，讓使用者能在 Hub 畫面掌握更新是否下載、安裝或回滾。",
+		"hub-v0.5.2": "補強慢速 GitHub 下載環境的 OTA 重試、逾時與進度回報，增加版本歷程入口，並改善更新後的健康確認，避免樹莓派網路較慢時被誤判失敗。",
+		"hub-v0.6.0": "將 Excel 水質與換水紀錄正式匯入樹莓派 SQLite，新增手動填寫、歷史圖表、最近量測提示、滴定計算工具，以及小魚未來與 HA 水溫來源切換。",
+		"hub-v0.7.0": "新增首頁能源總管、水質量測時效、每項水質獨立圖表與最近換水資訊，改善 K7 導覽和連線控制，並提供 CYD 螢幕使用的 Hub 狀態與換水 API。",
+		"hub-v0.7.1": "修正第二筆之後的手動水質或換水紀錄因空白來源識別碼重複而無法儲存的問題；儲存失敗時也會直接顯示後端原因，方便判斷輸入或資料庫錯誤。",
+	}
+	if note := notes[tag]; note != "" {
+		return note
+	}
+	runes := []rune(strings.TrimSpace(fallback))
+	if len(runes) > 100 {
+		runes = append(runes[:97], '…')
+	}
+	if len(runes) == 0 {
+		return "此版本包含系統穩定性與操作體驗修正；完整摘要將於發布時補充，Hub 內不需另開 GitHub 即可查看主要變更。"
+	}
+	return string(runes)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

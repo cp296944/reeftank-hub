@@ -43,6 +43,37 @@ func TestShaFor(t *testing.T) {
 	}
 }
 
+func TestCheckFallsBackToAssetsURL(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/acme/k7/releases", func(w http.ResponseWriter, r *http.Request) {
+		self := "http://" + r.Host
+		_ = json.NewEncoder(w).Encode([]map[string]any{{
+			"tag_name": "hub-v0.7.1", "prerelease": false,
+			"assets_url": self + "/release-assets", "assets": []any{},
+		}})
+	})
+	mux.HandleFunc("/release-assets", func(w http.ResponseWriter, r *http.Request) {
+		self := "http://" + r.Host
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"name": assetName, "browser_download_url": self + "/bin"},
+			{"name": sumsName, "browser_download_url": self + "/sums"},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	u := New(Options{Repo: "acme/k7", CurrentTag: "hub-v0.7.0", HTTPClient: srv.Client()})
+	oldBase := apiBaseForTest
+	apiBaseForTest = srv.URL
+	defer func() { apiBaseForTest = oldBase }()
+	rel, err := u.Check(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel == nil || rel.Tag != "hub-v0.7.1" || rel.AssetURL == "" || rel.SumsURL == "" {
+		t.Fatalf("fallback release = %+v", rel)
+	}
+}
+
 func TestCheckAndApply(t *testing.T) {
 	root := t.TempDir()
 	binContent := []byte("#!/bin/true\nnew-binary\n")

@@ -15,6 +15,7 @@ type Recorder interface {
 	RecordTemperature(context.Context, float64, time.Time, time.Time, time.Duration) error
 	SetSourceStatus(context.Context, string, bool, string, time.Time) error
 	TemperatureSource(context.Context) string
+	TemperatureInterval(context.Context) time.Duration
 	LatestHATemperature(context.Context) (float64, time.Time, bool)
 }
 
@@ -48,15 +49,18 @@ func New(url string, record Recorder) *Poller {
 func (p *Poller) Snapshot() Reading { p.mu.RLock(); defer p.mu.RUnlock(); return p.reading }
 
 func (p *Poller) Run(ctx context.Context) {
-	p.refresh(ctx)
-	t := time.NewTicker(time.Minute)
-	defer t.Stop()
 	for {
+		p.refresh(ctx)
+		interval := time.Minute
+		if p.record != nil {
+			interval = p.record.TemperatureInterval(ctx)
+		}
+		t := time.NewTimer(interval)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return
 		case <-t.C:
-			p.refresh(ctx)
 		}
 	}
 }

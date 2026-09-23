@@ -67,6 +67,11 @@ type Release struct {
 	SumsURL    string
 }
 
+type githubAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+}
+
 type Updater struct {
 	o        Options
 	mu       sync.RWMutex
@@ -135,14 +140,12 @@ func (u *Updater) Check(ctx context.Context) (*Release, error) {
 	}
 
 	var raw []struct {
-		TagName    string `json:"tag_name"`
-		Draft      bool   `json:"draft"`
-		Prerelease bool   `json:"prerelease"`
-		Body       string `json:"body"`
-		Assets     []struct {
-			Name string `json:"name"`
-			URL  string `json:"browser_download_url"`
-		} `json:"assets"`
+		TagName    string        `json:"tag_name"`
+		Draft      bool          `json:"draft"`
+		Prerelease bool          `json:"prerelease"`
+		Body       string        `json:"body"`
+		AssetsURL  string        `json:"assets_url"`
+		Assets     []githubAsset `json:"assets"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("updater: decode releases: %w", err)
@@ -160,6 +163,9 @@ func (u *Updater) Check(ctx context.Context) (*Release, error) {
 		rel.Tag = r.TagName
 		rel.Prerelease = r.Prerelease
 		rel.Notes = r.Body
+		if len(r.Assets) == 0 && r.AssetsURL != "" {
+			r.Assets, _ = u.releaseAssets(ctx, r.AssetsURL)
+		}
 		for _, a := range r.Assets {
 			switch a.Name {
 			case assetName:
@@ -183,6 +189,24 @@ func (u *Updater) Check(ctx context.Context) (*Release, error) {
 		return nil, nil
 	}
 	return best, nil
+}
+
+func (u *Updater) releaseAssets(ctx context.Context, url string) ([]githubAsset, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := u.o.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("updater: list release assets: HTTP %d", resp.StatusCode)
+	}
+	var assets []githubAsset
+	if err := json.NewDecoder(resp.Body).Decode(&assets); err != nil {
+		return nil, err
+	}
+	return assets, nil
 }
 
 // Apply downloads, verifies, installs, repoints current, and restarts.

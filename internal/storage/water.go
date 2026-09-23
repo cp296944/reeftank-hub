@@ -166,6 +166,14 @@ func (d *DB) SetSetting(ctx context.Context, key, value string) error {
 func (d *DB) TemperatureSource(ctx context.Context) string {
 	return d.Setting(ctx, "temperature.source", "direct")
 }
+
+func (d *DB) TemperatureInterval(ctx context.Context) time.Duration {
+	seconds, err := strconv.Atoi(d.Setting(ctx, "temperature.interval_seconds", "60"))
+	if err != nil || seconds < 30 || seconds > 3600 {
+		seconds = 60
+	}
+	return time.Duration(seconds) * time.Second
+}
 func (d *DB) LatestHATemperature(ctx context.Context) (float64, time.Time, bool) {
 	var v float64
 	var raw string
@@ -237,21 +245,29 @@ func (d *DB) registerWater(mux *http.ServeMux) {
 		writeJSON(w, 200, v)
 	})
 	mux.HandleFunc("GET /api/hub/settings/temperature", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"source": d.Setting(r.Context(), "temperature.source", "direct")})
+		writeJSON(w, 200, map[string]any{
+			"source":           d.Setting(r.Context(), "temperature.source", "direct"),
+			"interval_seconds": int(d.TemperatureInterval(r.Context()) / time.Second),
+		})
 	})
 	mux.HandleFunc("PUT /api/hub/settings/temperature", func(w http.ResponseWriter, r *http.Request) {
 		var v struct {
-			Source string `json:"source"`
+			Source          string `json:"source"`
+			IntervalSeconds int    `json:"interval_seconds"`
 		}
-		if json.NewDecoder(r.Body).Decode(&v) != nil || (v.Source != "direct" && v.Source != "ha") {
-			writeJSON(w, 400, map[string]string{"error": "source must be direct or ha"})
+		if json.NewDecoder(r.Body).Decode(&v) != nil || (v.Source != "direct" && v.Source != "ha") || v.IntervalSeconds < 30 || v.IntervalSeconds > 3600 {
+			writeJSON(w, 400, map[string]string{"error": "source must be direct or ha; interval_seconds must be between 30 and 3600"})
 			return
 		}
 		if e := d.SetSetting(r.Context(), "temperature.source", v.Source); e != nil {
 			writeJSON(w, 500, map[string]string{"error": e.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]string{"source": v.Source})
+		if e := d.SetSetting(r.Context(), "temperature.interval_seconds", strconv.Itoa(v.IntervalSeconds)); e != nil {
+			writeJSON(w, 500, map[string]string{"error": e.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"source": v.Source, "interval_seconds": v.IntervalSeconds})
 	})
 }
 

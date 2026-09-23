@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -67,7 +68,34 @@ type Release struct {
 }
 
 type Updater struct {
-	o Options
+	o        Options
+	mu       sync.RWMutex
+	progress Progress
+}
+
+type Progress struct {
+	Running    bool      `json:"running"`
+	Stage      string    `json:"stage,omitempty"`
+	Target     string    `json:"target,omitempty"`
+	File       string    `json:"file,omitempty"`
+	Downloaded int64     `json:"downloaded_bytes,omitempty"`
+	Total      int64     `json:"total_bytes,omitempty"`
+	Percent    float64   `json:"percent,omitempty"`
+	Error      string    `json:"error,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at,omitempty"`
+}
+
+func (u *Updater) Progress() Progress {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.progress
+}
+
+func (u *Updater) setProgress(p Progress) {
+	p.UpdatedAt = time.Now()
+	u.mu.Lock()
+	u.progress = p
+	u.mu.Unlock()
 }
 
 func New(o Options) *Updater {
@@ -158,20 +186,27 @@ func (u *Updater) Check(ctx context.Context) (*Release, error) {
 }
 
 // Apply downloads, verifies, installs, repoints current, and restarts.
-func (u *Updater) Apply(ctx context.Context, rel *Release) error {
+func (u *Updater) Apply(ctx context.Context, rel *Release) (resultErr error) {
 	if u.o.CurrentTag == "dev" {
 		return fmt.Errorf("updater: refusing to self-update a dev build")
 	}
+	u.setProgress(Progress{Running: true, Stage: "download", Target: rel.Tag, File: assetName})
+	defer func() {
+		if resultErr != nil {
+			u.setProgress(Progress{Stage: "failed", Target: rel.Tag, Error: resultErr.Error()})
+		}
+	}()
 	slog.Info("updater: applying", "from", u.o.CurrentTag, "to", rel.Tag)
 
-	bin, err := u.download(ctx, rel.AssetURL)
+	bin, err := u.download(ctx, rel.AssetURL, rel.Tag, assetName)
 	if err != nil {
 		return err
 	}
-	sums, err := u.download(ctx, rel.SumsURL)
+	sums, err := u.download(ctx, rel.SumsURL, rel.Tag, sumsName)
 	if err != nil {
 		return err
 	}
+	u.setProgress(Progress{Running: true, Stage: "verify", Target: rel.Tag, File: assetName, Downloaded: int64(len(bin)), Total: int64(len(bin)), Percent: 100})
 	want, err := shaFor(sums, assetName)
 	if err != nil {
 		return err
@@ -181,12 +216,14 @@ func (u *Updater) Apply(ctx context.Context, rel *Release) error {
 		return fmt.Errorf("updater: sha256 mismatch for %s", assetName)
 	}
 	if u.o.PreApply != nil {
+		u.setProgress(Progress{Running: true, Stage: "backup", Target: rel.Tag})
 		if err := u.o.PreApply(ctx, rel.Tag); err != nil {
 			return fmt.Errorf("updater: pre-apply backup: %w", err)
 		}
 	}
 
 	relDir := u.dir(filepath.Join("releases", rel.Tag))
+	u.setProgress(Progress{Running: true, Stage: "install", Target: rel.Tag})
 	if err := os.MkdirAll(relDir, 0o755); err != nil {
 		return err
 	}
@@ -210,6 +247,7 @@ func (u *Updater) Apply(ctx context.Context, rel *Release) error {
 	}
 
 	slog.Info("updater: installed, restarting service", "tag", rel.Tag)
+	u.setProgress(Progress{Running: true, Stage: "restart", Target: rel.Tag, Percent: 100})
 	return u.o.RestartFunc(ctx)
 }
 
@@ -237,13 +275,23 @@ func (u *Updater) ConfirmAfterStart(ctx context.Context, runningTag string, grac
 	}()
 }
 
-func (u *Updater) download(ctx context.Context, url string) ([]byte, error) {
+func (u *Updater) download(ctx context.Context, url, target, name string) ([]byte, error) {
 	var last error
 	for attempt := 1; attempt <= 3; attempt++ {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		resp, err := u.o.HTTPClient.Do(req)
 		if err == nil && resp.StatusCode == http.StatusOK {
-			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+			var downloaded int64
+			reader := io.TeeReader(io.LimitReader(resp.Body, 64<<20), writerFunc(func(p []byte) (int, error) {
+				downloaded += int64(len(p))
+				percent := float64(0)
+				if resp.ContentLength > 0 {
+					percent = float64(downloaded) * 100 / float64(resp.ContentLength)
+				}
+				u.setProgress(Progress{Running: true, Stage: "download", Target: target, File: name, Downloaded: downloaded, Total: resp.ContentLength, Percent: percent})
+				return len(p), nil
+			}))
+			body, readErr := io.ReadAll(reader)
 			_ = resp.Body.Close()
 			if readErr == nil {
 				return body, nil
@@ -269,6 +317,10 @@ func (u *Updater) download(ctx context.Context, url string) ([]byte, error) {
 	}
 	return nil, fmt.Errorf("updater: GET %s after 3 attempts: %w", url, last)
 }
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 
 func systemctlRestart(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "systemctl", "restart", "reeftank-hub")

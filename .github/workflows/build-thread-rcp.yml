@@ -21,7 +21,7 @@ jobs:
           source /opt/esp/idf/export.sh
           idf.py set-target esp32c6
           idf.py build
-          idf.py merge-bin -o build/reeftank-esp32c6-ot-rcp.bin
+          idf.py merge-bin -o reeftank-esp32c6-ot-rcp.bin
       - uses: actions/upload-artifact@v4
         with:
           name: reeftank-esp32c6-ot-rcp

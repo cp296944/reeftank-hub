@@ -49,7 +49,11 @@ func (d *DB) InsertWaterRecord(ctx context.Context, v WaterRecord) (int64, error
 		v.Source = "hub"
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	res, err := d.db.ExecContext(ctx, `INSERT INTO water_records(measured_at,no3,po4,ph,sg,kh,ca,mg,water_change,change_liters,note,source,source_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.UTC().Format(time.RFC3339Nano), v.NO3, v.PO4, v.PH, v.SG, v.KH, v.CA, v.MG, v.WaterChange, v.ChangeLiters, strings.TrimSpace(v.Note), v.Source, v.SourceRef, now, now)
+	var sourceRef any
+	if ref := strings.TrimSpace(v.SourceRef); ref != "" {
+		sourceRef = ref
+	}
+	res, err := d.db.ExecContext(ctx, `INSERT INTO water_records(measured_at,no3,po4,ph,sg,kh,ca,mg,water_change,change_liters,note,source,source_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.UTC().Format(time.RFC3339Nano), v.NO3, v.PO4, v.PH, v.SG, v.KH, v.CA, v.MG, v.WaterChange, v.ChangeLiters, strings.TrimSpace(v.Note), v.Source, sourceRef, now, now)
 	if err != nil {
 		return 0, err
 	}

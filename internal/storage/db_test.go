@@ -81,3 +81,19 @@ func TestBuiltinWaterSeedIsCompleteAndIdempotent(t *testing.T) {
 		t.Fatalf("latest ca=%v", latest["ca"])
 	}
 }
+
+func TestManualWaterRecordsAllowMultipleEmptySourceRefs(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, measuredAt := range []string{"2026-09-20T12:34", "2026-09-21T12:34"} {
+		if _, err := db.InsertWaterRecord(context.Background(), WaterRecord{
+			MeasuredAt:  measuredAt,
+			WaterChange: true,
+		}); err != nil {
+			t.Fatalf("insert manual record at %s: %v", measuredAt, err)
+		}
+	}
+}

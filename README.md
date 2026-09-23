@@ -1,13 +1,13 @@
 # ReefTank Hub
 
-Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口、本機歷史資料、K7 燈具控制、魔點四頭滴定介面，以及 Home Assistant、Google 水質資料和小魚未來水溫整合。
+Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口、本機歷史資料、K7 燈具控制、魔點四頭滴定介面，以及 Home Assistant 與小魚未來水溫整合。
 
 ## 系統分工
 
 - **ReefTank Hub**：彙整、歷史保存、網頁操作、K7、滴定機及 OTA。
 - **Home Assistant**：設備管理、自動化與通知。Hub 不搬移或取代現有 HA 自動化。
-- **Google 試算表**：NO3、PO4、pH、SG、KH、Ca、Mg 與換水紀錄的主資料來源。
-- **小魚未來 API**：Hub 與 HA 各自獨立查詢，互不轉傳。
+- **Hub SQLite**：NO3、PO4、pH、SG、KH、Ca、Mg 與換水紀錄的主資料來源。
+- **小魚未來 API**：預設由 Hub 與 HA 各自查詢；可在系統頁手動改由 HA 提供，且不會自動切換。
 
 ## 網頁入口
 
@@ -49,20 +49,20 @@ HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
 
 在同一個 root-only 環境檔設定 `XIAOYU_URL`。網址包含設備序號，因此視為
 敏感資料，不寫入一般設定、網頁回應、備份或 Git。Hub 每 60 秒直接查詢、
-保留最後成功值及延遲／過期狀態，並將歷史永久保存到 SQLite；首頁不透過 HA
-轉傳水溫。
+保留最後成功值及延遲／過期狀態，並將歷史永久保存到 SQLite。系統頁可手動
+選擇 Hub 直連或 HA 來源；失敗時不會暗中切換。
 
-## Google 水質
+## 本機水質資料
 
-`GOOGLE_SHEETS_URL` 放在 root-only 環境檔，包含 Apps Script Web App URL 與
-key，不進 Git。Hub 每 30 分鐘同步最新資料，啟動時回補全歷史到 SQLite。
-水質新增採「寫入 Google → 重新讀回 → 更新本機鏡射」，Google Sheet 維持主資料。
+既有 Excel 的 73 筆水質與換水紀錄會在升級時冪等匯入 SQLite。之後由
+`/water/` 直接新增資料，並與水溫歷史集中顯示；重啟與 OTA 不會重複匯入。
 
 ## 魔點四頭滴定
 
 目前提供完整軟體模擬模式：四泵頭、校正、容器／液量、手動滴定、每日總量、
 分次與星期排程、讀回確認、操作稽核及故障注入。所有 BLE capability 明確標成
-尚未實機驗證，避免模擬成功被誤認為設備已執行。
+尚未實機驗證，避免模擬成功被誤認為設備已執行。頁面另含依原 Excel 參數
+建立的雙向滴定計算工具；計算結果不會啟動、設定或傳送到滴定機。
 
 Hub 首頁右上角集中管理檢查更新、立即 OTA、自動更新與版本歷程；K7
 頁面只保留燈具本身的語言、監視與設定。電源頁透過 HA API 顯示三條

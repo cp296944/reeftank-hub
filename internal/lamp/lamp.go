@@ -52,6 +52,11 @@ func (l *Lamp) DemandActive() (bool, time.Time) {
 	defer l.mu.Unlock()
 	return !l.demandOnly || time.Now().Before(l.activeUntil), l.activeUntil
 }
+func (l *Lamp) Sleep() {
+	l.mu.Lock()
+	l.activeUntil = time.Time{}
+	l.mu.Unlock()
+}
 
 func New(host string, port int) *Lamp {
 	if port == 0 {

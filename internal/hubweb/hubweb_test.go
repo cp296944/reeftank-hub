@@ -27,7 +27,7 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 		{"/K7/mobile.html", 200, "k7", "/static/mobile.html"},
 		{"/dosing/", 200, "魔點四頭滴定", ""},
 		{"/power/", 200, "18 路設備", ""},
-		{"/water/", 200, "Google 試算表", ""},
+		{"/water/", 200, "樹莓派本機資料庫", ""},
 		{"/system/", 200, "系統狀態", ""},
 		{"/api/version", 200, "k7", "/api/version"},
 		{"/static/index.html", 200, "k7", "/static/index.html"},

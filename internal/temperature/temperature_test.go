@@ -17,6 +17,10 @@ func (r *recorder) RecordTemperature(_ context.Context, v float64, _, _ time.Tim
 func (r *recorder) SetSourceStatus(context.Context, string, bool, string, time.Time) error {
 	return nil
 }
+func (r *recorder) TemperatureSource(context.Context) string { return "direct" }
+func (r *recorder) LatestHATemperature(context.Context) (float64, time.Time, bool) {
+	return 0, time.Time{}, false
+}
 
 func TestPoll(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

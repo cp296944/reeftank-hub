@@ -20,7 +20,6 @@ type Options struct {
 	K7          http.Handler
 	Version     string
 	InstallRoot string
-	OnK7Access  func()
 }
 
 type handler struct {
@@ -82,7 +81,7 @@ func (h *handler) serveModule(w http.ResponseWriter, r *http.Request) {
 	replacements := map[string][3]string{
 		"dosing": {"魔點四頭滴定", "校正、容器、排程與手動滴定", "完整模擬模式；BLE 實機驗證待設備旁操作。"},
 		"power":  {"電源監控", "三組排插與 18 路設備", "Home Assistant 即時狀態與 Hub 本機歷史。"},
-		"water":  {"水質與換水", "Google 試算表為主資料來源", "七項水質鏡射、本機歷史與手動同步。"},
+		"water":  {"水質、水溫與換水", "樹莓派本機資料庫", "手動紀錄、完整歷史與獨立溫度來源。"},
 		"system": {"系統狀態", "連線、版本、備份與 OTA", "檢查資料來源、資料庫及更新狀態。"},
 	}
 	copyText := string(b)
@@ -111,9 +110,6 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 // endpoints. Rewriting only the initial document lets /K7/ become its stable
 // human-facing entry point without forking that upstream UI.
 func (h *handler) serveK7(w http.ResponseWriter, r *http.Request) {
-	if h.OnK7Access != nil {
-		h.OnK7Access()
-	}
 	r2 := r.Clone(r.Context())
 	r2.URL.Path = "/static/" + strings.TrimPrefix(r.URL.Path, "/K7/")
 	h.K7.ServeHTTP(w, r2)

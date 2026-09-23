@@ -11,6 +11,18 @@ func (s *Store) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hub/dosing", func(w http.ResponseWriter, r *http.Request) {
 		write(w, 200, map[string]any{"state": s.Snapshot(), "upcoming": s.Upcoming(), "capabilities": Capabilities()})
 	})
+	mux.HandleFunc("PUT /api/hub/dosing/calculator", func(w http.ResponseWriter, r *http.Request) {
+		var v Calculator
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&v) != nil {
+			write(w, 400, map[string]string{"error": "invalid JSON"})
+			return
+		}
+		if e := s.SetCalculator(v); e != nil {
+			write(w, 400, map[string]string{"error": e.Error()})
+			return
+		}
+		write(w, 200, v)
+	})
 	mux.HandleFunc("PUT /api/hub/dosing/heads/", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/api/hub/dosing/heads/"))
 		var h Head

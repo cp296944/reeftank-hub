@@ -52,3 +52,32 @@ func TestCorruptDatabaseIsPreservedAndRebuilt(t *testing.T) {
 		t.Fatalf("preserved corrupt files=%v", matches)
 	}
 }
+
+func TestBuiltinWaterSeedIsCompleteAndIdempotent(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	seed := BuiltinWaterSeed()
+	if len(seed) != 73 {
+		t.Fatalf("seed rows=%d", len(seed))
+	}
+	if err := db.SeedWaterRecords(context.Background(), seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SeedWaterRecords(context.Background(), seed); err != nil {
+		t.Fatal(err)
+	}
+	dash, err := db.WaterDashboard(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dash["count"] != 73 {
+		t.Fatalf("dashboard count=%v", dash["count"])
+	}
+	latest := dash["latest"].(map[string]any)
+	if latest["ca"].(map[string]any)["value"] != 430.0 {
+		t.Fatalf("latest ca=%v", latest["ca"])
+	}
+}

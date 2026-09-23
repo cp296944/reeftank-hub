@@ -10,6 +10,7 @@ import (
 )
 
 func (d *DB) Register(mux *http.ServeMux) {
+	d.registerWater(mux)
 	mux.HandleFunc("GET /api/hub/storage/status", func(w http.ResponseWriter, r *http.Request) {
 		count, err := d.SampleCount(r.Context())
 		if err != nil {

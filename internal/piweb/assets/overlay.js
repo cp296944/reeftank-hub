@@ -837,7 +837,20 @@
       else start();
     });
 })();
-// Keep the K7 transport awake only while this page is open. The lamp itself
-// continues its native schedule when the Hub connection goes dormant.
-fetch('/api/hub/k7/session',{method:'POST'}).catch(()=>{});
-setInterval(()=>fetch('/api/hub/k7/session',{method:'POST'}).catch(()=>{}),45000);
+// K7 is deliberately dormant until the operator asks for a verified session.
+// A lease alone is not called "connected": POST performs a real lamp read.
+(()=>{
+  const box=document.createElement('div');
+  box.id='hub-k7-link';
+  box.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;display:flex;align-items:center;gap:8px;padding:9px 11px;background:#10191df2;border:1px solid #33464d;border-radius:8px;color:#dcebed;font:12px system-ui;box-shadow:0 8px 28px #0008';
+  box.innerHTML='<span id="hub-k7-dot" style="width:8px;height:8px;border-radius:50%;background:#7b8589"></span><span id="hub-k7-text">K7 休眠中</span><button id="hub-k7-connect">連線燈具</button><button id="hub-k7-sleep" style="display:none">中斷</button>';
+  document.body.append(box);
+  const text=box.querySelector('#hub-k7-text'),dot=box.querySelector('#hub-k7-dot'),connect=box.querySelector('#hub-k7-connect'),sleep=box.querySelector('#hub-k7-sleep');
+  let keepAlive=0;
+  const paint=d=>{const connected=!!d.connected;dot.style.background=connected?'#3ed6a4':d.active?'#efbd66':'#7b8589';text.textContent=connected?'K7 已連線':d.active?'K7 無回應':'K7 休眠中';connect.textContent=connected?'重新連線':'連線燈具';sleep.style.display=d.active?'inline-block':'none'};
+  const status=()=>fetch('/api/hub/k7/session').then(r=>r.json()).then(paint).catch(()=>{text.textContent='Hub 無回應';dot.style.background='#ef6262'});
+  const renew=()=>fetch('/api/hub/k7/session',{method:'POST'}).then(async r=>{const d=await r.json();paint(d);if(!r.ok)throw new Error(d.error||'連線失敗')});
+  connect.onclick=async()=>{connect.disabled=true;text.textContent='K7 連線中…';try{await renew();clearInterval(keepAlive);keepAlive=setInterval(renew,45000)}catch(e){text.textContent='K7 連線失敗'}finally{connect.disabled=false}};
+  sleep.onclick=async()=>{clearInterval(keepAlive);await fetch('/api/hub/k7/session',{method:'DELETE'});status()};
+  status();setInterval(status,15000);
+})();

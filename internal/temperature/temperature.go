@@ -14,6 +14,8 @@ import (
 type Recorder interface {
 	RecordTemperature(context.Context, float64, time.Time, time.Time, time.Duration) error
 	SetSourceStatus(context.Context, string, bool, string, time.Time) error
+	TemperatureSource(context.Context) string
+	LatestHATemperature(context.Context) (float64, time.Time, bool)
 }
 
 type Reading struct {
@@ -26,27 +28,27 @@ type Reading struct {
 	Configured   bool          `json:"configured"`
 	Stale        bool          `json:"stale"`
 	LastError    string        `json:"last_error,omitempty"`
+	Source       string        `json:"source"`
 }
 
 type Poller struct {
-	url     string
-	http    *http.Client
-	record  Recorder
-	mu      sync.RWMutex
-	reading Reading
+	url      string
+	http     *http.Client
+	record   Recorder
+	mu       sync.RWMutex
+	reading  Reading
+	failures int
+	nextTry  time.Time
 }
 
 func New(url string, record Recorder) *Poller {
-	return &Poller{url: url, record: record, http: &http.Client{Timeout: 10 * time.Second}, reading: Reading{Unit: "°C", Configured: url != "", Stale: true}}
+	return &Poller{url: url, record: record, http: &http.Client{Timeout: 10 * time.Second}, reading: Reading{Unit: "°C", Configured: url != "", Stale: true, Source: "direct"}}
 }
 
 func (p *Poller) Snapshot() Reading { p.mu.RLock(); defer p.mu.RUnlock(); return p.reading }
 
 func (p *Poller) Run(ctx context.Context) {
-	if p.url == "" {
-		return
-	}
-	p.poll(ctx)
+	p.refresh(ctx)
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -54,9 +56,36 @@ func (p *Poller) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			p.poll(ctx)
+			p.refresh(ctx)
 		}
 	}
+}
+
+func (p *Poller) refresh(ctx context.Context) {
+	if p.record != nil && p.record.TemperatureSource(ctx) == "ha" {
+		v, at, ok := p.record.LatestHATemperature(ctx)
+		r := Reading{Value: v, Unit: "°C", SourceTime: at, ReceivedTime: at, Configured: ok, Stale: !ok || time.Since(at) > 2*time.Minute, Source: "ha"}
+		if !ok {
+			r.LastError = "Home Assistant temperature is unavailable"
+		}
+		p.mu.Lock()
+		p.reading = r
+		p.mu.Unlock()
+		return
+	}
+	if p.url == "" {
+		p.mu.Lock()
+		p.reading = Reading{Unit: "°C", Configured: false, Stale: true, Source: "direct"}
+		p.mu.Unlock()
+		return
+	}
+	p.mu.RLock()
+	next := p.nextTry
+	p.mu.RUnlock()
+	if time.Now().Before(next) {
+		return
+	}
+	p.poll(ctx)
 }
 
 func (p *Poller) poll(ctx context.Context) {
@@ -87,9 +116,11 @@ func (p *Poller) poll(ctx context.Context) {
 					} else {
 						now := time.Now().UTC()
 						latency := time.Since(start)
-						r := Reading{Value: v, Unit: "°C", SourceTime: now, ReceivedTime: now, Latency: latency, LatencyMS: latency.Milliseconds(), Configured: true}
+						r := Reading{Value: v, Unit: "°C", SourceTime: now, ReceivedTime: now, Latency: latency, LatencyMS: latency.Milliseconds(), Configured: true, Source: "direct"}
 						p.mu.Lock()
 						p.reading = r
+						p.failures = 0
+						p.nextTry = time.Time{}
 						p.mu.Unlock()
 						if p.record != nil {
 							_ = p.record.RecordTemperature(ctx, v, now, now, latency)
@@ -105,6 +136,14 @@ func (p *Poller) poll(ctx context.Context) {
 	p.reading.Configured = true
 	p.reading.Stale = true
 	p.reading.LastError = err.Error()
+	p.reading.Source = "direct"
+	p.failures++
+	delays := []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute}
+	i := p.failures - 1
+	if i >= len(delays) {
+		i = len(delays) - 1
+	}
+	p.nextTry = time.Now().Add(delays[i])
 	p.mu.Unlock()
 	if p.record != nil {
 		_ = p.record.SetSourceStatus(context.Background(), "xiaoyu_temperature", false, err.Error(), time.Now())

@@ -42,14 +42,24 @@ type Simulator struct {
 	Failure string `json:"next_failure,omitempty"`
 	DelayMS int    `json:"delay_ms,omitempty"`
 }
+type Calculator struct {
+	TankLiters       float64 `json:"tank_liters"`
+	PO4Concentration float64 `json:"po4_concentration"`
+	NO3Concentration float64 `json:"no3_concentration"`
+	KHEfficiency     float64 `json:"kh_efficiency"`
+	PO4DailyLimit    float64 `json:"po4_daily_limit"`
+	NO3DailyLimit    float64 `json:"no3_daily_limit"`
+	KHDailyLimit     float64 `json:"kh_daily_limit"`
+}
 type State struct {
-	Mode        string    `json:"mode"`
-	Connected   bool      `json:"connected"`
-	Verified    bool      `json:"hardware_verified"`
-	Heads       []Head    `json:"heads"`
-	Audit       []Audit   `json:"audit"`
-	NextAuditID int64     `json:"next_audit_id"`
-	Simulator   Simulator `json:"simulator"`
+	Mode        string     `json:"mode"`
+	Connected   bool       `json:"connected"`
+	Verified    bool       `json:"hardware_verified"`
+	Heads       []Head     `json:"heads"`
+	Audit       []Audit    `json:"audit"`
+	NextAuditID int64      `json:"next_audit_id"`
+	Simulator   Simulator  `json:"simulator"`
+	Calculator  Calculator `json:"calculator"`
 }
 type Store struct {
 	mu    sync.Mutex
@@ -72,14 +82,33 @@ func Open(path string) (*Store, error) {
 			return nil, e
 		}
 	}
+	// Older simulation files encoded a nil slice as JSON null.  Keep the API
+	// contract stable for browsers and persist the repaired representation.
+	changed := false
+	if s.state.Audit == nil {
+		s.state.Audit = []Audit{}
+		changed = true
+	}
+	if s.state.Calculator.TankLiters <= 0 {
+		s.state.Calculator = defaultCalculator()
+		changed = true
+	}
+	if changed {
+		if e := s.save(); e != nil {
+			return nil, e
+		}
+	}
 	return s, nil
+}
+func defaultCalculator() Calculator {
+	return Calculator{TankLiters: 320, PO4Concentration: 2.435, NO3Concentration: 49.0625, KHEfficiency: 2.6, PO4DailyLimit: .02, NO3DailyLimit: 2, KHDailyLimit: .5}
 }
 func defaults() State {
 	h := make([]Head, 4)
 	for i := range h {
 		h[i] = Head{ID: i + 1, Name: fmt.Sprintf("泵頭 %d", i+1), CalibrationMLPerMin: 60, ContainerML: 1000, RemainingML: 1000, Enabled: true, Schedule: Schedule{Doses: 1, Start: "00:00", Weekdays: []int{1, 2, 3, 4, 5, 6, 7}}}
 	}
-	return State{Mode: "simulation", Heads: h, NextAuditID: 1}
+	return State{Mode: "simulation", Heads: h, Audit: []Audit{}, NextAuditID: 1, Calculator: defaultCalculator()}
 }
 func (s *Store) save() error {
 	if e := os.MkdirAll(filepath.Dir(s.path), 0750); e != nil {
@@ -100,8 +129,17 @@ func (s *Store) Snapshot() State {
 	defer s.mu.Unlock()
 	out := s.state
 	out.Heads = append([]Head(nil), s.state.Heads...)
-	out.Audit = append([]Audit(nil), s.state.Audit...)
+	out.Audit = append([]Audit{}, s.state.Audit...)
 	return out
+}
+func (s *Store) SetCalculator(v Calculator) error {
+	if v.TankLiters <= 0 || v.PO4Concentration <= 0 || v.NO3Concentration <= 0 || v.KHEfficiency <= 0 || v.PO4DailyLimit <= 0 || v.NO3DailyLimit <= 0 || v.KHDailyLimit <= 0 {
+		return errors.New("all calculator parameters must be positive")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.Calculator = v
+	return s.save()
 }
 func validate(h Head) error {
 	if h.ID < 1 || h.ID > 4 {

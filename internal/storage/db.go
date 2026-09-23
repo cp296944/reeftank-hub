@@ -67,12 +67,15 @@ func (d *DB) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_entity_samples_time ON entity_samples(entity_id, source_time)`,
 		`CREATE TABLE IF NOT EXISTS equipment_mapping(device_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, switch_entity TEXT NOT NULL, slot INTEGER NOT NULL, critical INTEGER NOT NULL, updated_at TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS water_quality(id INTEGER PRIMARY KEY, metric TEXT NOT NULL, value REAL, unit TEXT, source_time TEXT NOT NULL, received_time TEXT NOT NULL, UNIQUE(metric, source_time))`,
+		`CREATE TABLE IF NOT EXISTS water_records(id INTEGER PRIMARY KEY AUTOINCREMENT, measured_at TEXT NOT NULL, no3 REAL, po4 REAL, ph REAL, sg REAL, kh REAL, ca REAL, mg REAL, water_change INTEGER NOT NULL DEFAULT 0, change_liters REAL, note TEXT, source TEXT NOT NULL DEFAULT 'hub', source_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(source,source_ref))`,
+		`CREATE INDEX IF NOT EXISTS idx_water_records_time ON water_records(measured_at)`,
 		`CREATE TABLE IF NOT EXISTS temperature_samples(source TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL, source_time TEXT NOT NULL, received_time TEXT NOT NULL, latency_ms INTEGER, PRIMARY KEY(source,source_time))`,
 		`CREATE TABLE IF NOT EXISTS dosing_heads(id INTEGER PRIMARY KEY, name TEXT NOT NULL, liquid TEXT, calibration REAL, container_ml REAL, remaining_ml REAL, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS dosing_audit(id INTEGER PRIMARY KEY, head_id INTEGER, action TEXT NOT NULL, amount_ml REAL, status TEXT NOT NULL, detail TEXT, source_time TEXT NOT NULL, received_time TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`,
 		`INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(1,datetime('now'))`,
 		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('retention.entity_samples_days','0',datetime('now'))`,
+		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('temperature.source','direct',datetime('now'))`,
 	}
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -130,26 +133,42 @@ func (d *DB) TemperatureCount(ctx context.Context) (int64, error) {
 }
 
 type HistoryPoint struct {
-	EntityID    string `json:"entity_id"`
-	State       string `json:"state"`
-	LastUpdated string `json:"last_updated"`
+	EntityID    string  `json:"entity_id"`
+	State       string  `json:"state"`
+	LastUpdated string  `json:"last_updated"`
+	Min         float64 `json:"min,omitempty"`
+	Max         float64 `json:"max,omitempty"`
+	Average     float64 `json:"average,omitempty"`
+	Samples     int64   `json:"samples,omitempty"`
 }
 
 func (d *DB) History(ctx context.Context, entityIDs []string, since time.Time) ([][]HistoryPoint, error) {
+	hours := int(time.Since(since).Hours())
+	bucket := 60
+	switch {
+	case hours > 24*31:
+		bucket = 86400
+	case hours > 24*7:
+		bucket = 3600
+	case hours > 24:
+		bucket = 900
+	case hours > 6:
+		bucket = 300
+	}
 	out := make([][]HistoryPoint, 0, len(entityIDs))
 	for _, id := range entityIDs {
 		id = strings.TrimSpace(id)
 		if id == "" {
 			continue
 		}
-		rows, err := d.db.QueryContext(ctx, `SELECT entity_id,state,source_time FROM entity_samples WHERE entity_id=? AND source_time>=? ORDER BY source_time`, id, since.UTC().Format(time.RFC3339Nano))
+		rows, err := d.db.QueryContext(ctx, `SELECT entity_id,printf('%.6f',avg(value)),max(source_time),min(value),max(value),avg(value),count(*) FROM entity_samples WHERE entity_id=? AND source_time>=? AND value IS NOT NULL GROUP BY CAST(strftime('%s',source_time)/? AS INTEGER) ORDER BY max(source_time)`, id, since.UTC().Format(time.RFC3339Nano), bucket)
 		if err != nil {
 			return nil, err
 		}
 		group := []HistoryPoint{}
 		for rows.Next() {
 			var p HistoryPoint
-			if err := rows.Scan(&p.EntityID, &p.State, &p.LastUpdated); err != nil {
+			if err := rows.Scan(&p.EntityID, &p.State, &p.LastUpdated, &p.Min, &p.Max, &p.Average, &p.Samples); err != nil {
 				rows.Close()
 				return nil, err
 			}

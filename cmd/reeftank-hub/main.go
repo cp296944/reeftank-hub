@@ -36,7 +36,6 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/profiles"
 	"github.com/cp296944/reeftank-hub/internal/proxy"
 	"github.com/cp296944/reeftank-hub/internal/ringlog"
-	"github.com/cp296944/reeftank-hub/internal/sheets"
 	"github.com/cp296944/reeftank-hub/internal/storage"
 	"github.com/cp296944/reeftank-hub/internal/tally"
 	"github.com/cp296944/reeftank-hub/internal/temperature"
@@ -112,7 +111,9 @@ func run(args []string) error {
 	haSync := homeassistant.NewSyncer(haClient, hubDB, homeassistant.TrackedEntities(equipmentStore.Snapshot()))
 	haAPI := &homeassistant.API{Client: haClient, Equipment: equipmentStore, Sync: haSync}
 	temperaturePoller := temperature.New(cfg.XiaoyuURL, hubDB)
-	sheetsSync := sheets.New(cfg.SheetsURL, hubDB)
+	if err := hubDB.SeedWaterRecords(context.Background(), storage.BuiltinWaterSeed()); err != nil {
+		return fmt.Errorf("import built-in water records: %w", err)
+	}
 	dosingStore, err := dosing.Open(filepath.Join(cfg.DataDir, "dosing.json"))
 	if err != nil {
 		return fmt.Errorf("open dosing state: %w", err)
@@ -122,7 +123,6 @@ func run(args []string) error {
 	defer stop()
 	go haSync.Run(ctx)
 	go temperaturePoller.Run(ctx)
-	go sheetsSync.Run(ctx)
 	go func() {
 		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 		defer cancel()
@@ -266,7 +266,6 @@ func run(args []string) error {
 	})
 	hubHandler := hubweb.New(hubweb.Options{
 		K7: uiHandler, Version: version.Version, InstallRoot: cfg.InstallRoot,
-		OnK7Access: func() { lampConn.Touch(2 * time.Minute) },
 	})
 
 	started := time.Now()
@@ -282,15 +281,27 @@ func run(args []string) error {
 
 	srv := &http.Server{
 		Addr: cfg.Listen,
-		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, sheetsSync.Register, dosingStore.Register, hubDB.Register, func(mux *http.ServeMux) {
+		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
 				lampConn.Touch(2 * time.Minute)
+				_, err := lampConn.ReadAll()
 				active, until := lampConn.DemandActive()
-				writeJSON(w, http.StatusOK, map[string]any{"active": active, "until": until})
+				status := http.StatusOK
+				errMessage := ""
+				if err != nil {
+					status = http.StatusBadGateway
+					errMessage = err.Error()
+				}
+				writeJSON(w, status, map[string]any{"active": active, "until": until, "connected": err == nil, "health": lampConn.Health(), "error": errMessage})
 			})
 			mux.HandleFunc("GET /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
 				active, until := lampConn.DemandActive()
-				writeJSON(w, http.StatusOK, map[string]any{"active": active, "until": until})
+				h := lampConn.Health()
+				writeJSON(w, http.StatusOK, map[string]any{"active": active, "until": until, "connected": active && h.OK, "health": h})
+			})
+			mux.HandleFunc("DELETE /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
+				lampConn.Sleep()
+				writeJSON(w, http.StatusOK, map[string]any{"active": false, "connected": false})
 			})
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

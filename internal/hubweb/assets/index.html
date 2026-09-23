@@ -13,16 +13,15 @@
     <div class="top-status"><span class="dot"></span><span id="hub-status">系統啟動中</span><button id="update-check" class="top-button" type="button">檢查更新</button><label class="auto-update"><input id="update-auto" type="checkbox">自動</label><span id="update-status"></span><button id="version" class="version version-button" type="button">—</button></div>
   </header>
   <main>
-    <section class="hero">
-      <div><p class="eyebrow">AQUARIUM OVERVIEW</p><h1>魚缸現在的狀況，<br>一眼就看清楚。</h1><p class="muted">首頁只讀取樹莓派快取，不會喚醒 K7 或滴定機。</p></div>
-      <div class="hero-reading"><span>水溫</span><strong><b id="home-temperature">--</b><small>°C</small></strong><em id="home-temperature-note">等待資料來源</em></div>
-    </section>
+    <section class="console-head"><div><p class="eyebrow">REEFTANK CONTROL CENTER</p><h1>海水缸總覽</h1></div><div class="console-clock" id="console-clock">--</div></section>
+    <section class="section-head compact"><div><p class="eyebrow">WATER PARAMETERS</p><h2>最新水質</h2></div><a href="/water/">紀錄與歷史 →</a></section>
+    <section id="water-dashboard" class="water-dashboard"><article class="parameter-card"><span>載入中</span></article></section>
 
     <section class="metric-grid" aria-label="摘要">
       <article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article>
       <article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article>
-      <article class="metric"><span>本月用電</span><strong id="home-month">-- kWh</strong><small>三組排插合計</small></article>
-      <article class="metric"><span>最近測水</span><strong id="home-water">--</strong><small>資料來自 Google 試算表</small></article>
+      <article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article>
+      <article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article>
     </section>
 
     <section class="section-head"><div><p class="eyebrow">LIFE SUPPORT</p><h2>生命維持設備</h2></div><a href="/power/">完整電源監控 →</a></section>
@@ -33,8 +32,7 @@
       <a class="module ready" href="/K7/"><div class="icon">☀</div><div><h3>K7 燈具</h3><p>三燈連動 · 排程與手動控制</p></div><span>可使用</span></a>
       <a class="module ready" href="/dosing/"><div class="icon">◫</div><div><h3>魔點滴定</h3><p>四泵頭 · 排程 · 校正 · 液量</p></div><span id="module-dosing">模擬模式</span></a>
       <a class="module ready" href="/power/"><div class="icon">ϟ</div><div><h3>電源監控</h3><p>18 路插座 · 即時與歷史用電</p></div><span id="module-power">連線中</span></a>
-      <a class="module ready" href="/water/"><div class="icon">◉</div><div><h3>水質紀錄</h3><p>七項水質 · 換水 · 長期趨勢</p></div><span id="module-water">等待同步</span></a>
-      <a class="module ready" href="/system/"><div class="icon">🌡</div><div><h3>獨立水溫</h3><p>小魚未來雲端 · 本機長期保存</p></div><span id="module-temperature">連線中</span></a>
+      <a class="module ready" href="/water/"><div class="icon">◉</div><div><h3>水質與水溫</h3><p>七項水質 · 溫度 · 換水 · 歷史</p></div><span id="module-water">本機資料</span></a>
     </section>
 
     <section id="bootstrap-card" class="notice hidden">

@@ -16,7 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build RCP
         working-directory: firmware/esp32c6-ot-rcp
+        shell: bash
         run: |
+          source /opt/esp/idf/export.sh
           idf.py set-target esp32c6
           idf.py build
           idf.py merge-bin -o build/reeftank-esp32c6-ot-rcp.bin

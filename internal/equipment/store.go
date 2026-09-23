@@ -16,24 +16,27 @@ import (
 )
 
 type Device struct {
-	ID           string `json:"id"`
-	DisplayName  string `json:"display_name"`
-	Slot         int    `json:"slot"`
-	SwitchEntity string `json:"switch_entity"`
-	Critical     bool   `json:"critical"`
+	ID            string `json:"id"`
+	DisplayName   string `json:"display_name"`
+	Slot          int    `json:"slot"`
+	SwitchEntity  string `json:"switch_entity"`
+	Critical      bool   `json:"critical"`
+	HighFrequency bool   `json:"high_frequency"`
 }
 
 type PowerStrip struct {
-	ID                string `json:"id"`
-	DisplayName       string `json:"display_name"`
-	SlotStart         int    `json:"slot_start"`
-	SlotEnd           int    `json:"slot_end"`
-	LEDEntity         string `json:"led_entity"`
-	CurrentEntity     string `json:"current_entity"`
-	PowerEntity       string `json:"power_entity"`
-	TodayEnergyEntity string `json:"today_energy_entity"`
-	MonthEnergyEntity string `json:"month_energy_entity"`
-	OnSinceEntity     string `json:"on_since_entity"`
+	ID                  string `json:"id"`
+	DisplayName         string `json:"display_name"`
+	SlotStart           int    `json:"slot_start"`
+	SlotEnd             int    `json:"slot_end"`
+	LEDEntity           string `json:"led_entity"`
+	CurrentEntity       string `json:"current_entity"`
+	PowerEntity         string `json:"power_entity"`
+	TodayEnergyEntity   string `json:"today_energy_entity"`
+	MonthEnergyEntity   string `json:"month_energy_entity"`
+	OnSinceEntity       string `json:"on_since_entity"`
+	Host                string `json:"host"`
+	PollIntervalSeconds int    `json:"poll_interval_seconds"`
 }
 
 type Snapshot struct {
@@ -162,6 +165,47 @@ func (s *Store) Rename(id, displayName string) (Snapshot, error) {
 	return Snapshot{}, fmt.Errorf("unknown equipment %q", id)
 }
 
+func (s *Store) SetHighFrequency(id string, enabled bool) (Snapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.data.Devices {
+		if s.data.Devices[i].ID != id {
+			continue
+		}
+		s.data.Devices[i].HighFrequency = enabled
+		s.data.Revision++
+		s.data.UpdatedAt = s.now().UTC()
+		if err := s.saveLocked(); err != nil {
+			return Snapshot{}, err
+		}
+		s.notifyLocked()
+		return cloneSnapshot(s.data), nil
+	}
+	return Snapshot{}, fmt.Errorf("unknown equipment %q", id)
+}
+
+func (s *Store) SetStripPollInterval(id string, seconds int) (Snapshot, error) {
+	if seconds < 1 || seconds > 3600 {
+		return Snapshot{}, errors.New("poll_interval_seconds must be between 1 and 3600")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.data.PowerStrips {
+		if s.data.PowerStrips[i].ID != id {
+			continue
+		}
+		s.data.PowerStrips[i].PollIntervalSeconds = seconds
+		s.data.Revision++
+		s.data.UpdatedAt = s.now().UTC()
+		if err := s.saveLocked(); err != nil {
+			return Snapshot{}, err
+		}
+		s.notifyLocked()
+		return cloneSnapshot(s.data), nil
+	}
+	return Snapshot{}, fmt.Errorf("unknown power strip %q", id)
+}
+
 func (s *Store) notifyLocked() {
 	if s.onChange != nil {
 		s.onChange(cloneSnapshot(s.data))
@@ -188,8 +232,8 @@ func (s *Store) saveLocked() error {
 }
 
 func validate(s Snapshot) error {
-	if s.Schema != 1 || len(s.PowerStrips) != 3 || len(s.Devices) != 18 {
-		return fmt.Errorf("expected schema 1 with 3 power strips and 18 devices")
+	if s.Schema != 2 || len(s.PowerStrips) != 3 || len(s.Devices) != 18 {
+		return fmt.Errorf("expected schema 2 with 3 power strips and 18 devices")
 	}
 	stripIDs, covered := map[string]bool{}, map[int]bool{}
 	for _, strip := range s.PowerStrips {
@@ -224,11 +268,35 @@ func validate(s Snapshot) error {
 }
 
 func normalize(s *Snapshot) bool {
-	if len(s.PowerStrips) != 0 {
-		return false
+	changed := false
+	// Schema 2 adds direct high-frequency outlet polling. Enable the two
+	// momentary aquarium devices during upgrade so existing installations get
+	// the intended defaults, while all later user choices remain untouched.
+	if s.Schema == 1 {
+		for i := range s.Devices {
+			if s.Devices[i].Slot == 9 || s.Devices[i].Slot == 10 {
+				s.Devices[i].HighFrequency = true
+			}
+		}
+		s.Schema = 2
+		changed = true
 	}
-	s.PowerStrips = defaultPowerStrips()
-	return true
+	if len(s.PowerStrips) == 0 {
+		s.PowerStrips = defaultPowerStrips()
+		changed = true
+	}
+	defaults := defaultPowerStrips()
+	for i := range s.PowerStrips {
+		if s.PowerStrips[i].PollIntervalSeconds == 0 {
+			s.PowerStrips[i].PollIntervalSeconds = defaults[i].PollIntervalSeconds
+			changed = true
+		}
+		if s.PowerStrips[i].Host == "" {
+			s.PowerStrips[i].Host = defaults[i].Host
+			changed = true
+		}
+	}
+	return changed
 }
 
 func cloneSnapshot(in Snapshot) Snapshot {
@@ -249,13 +317,13 @@ func defaultSnapshot() Snapshot {
 	critical := map[int]bool{4: true, 5: true, 10: true, 11: true, 12: true, 15: true}
 	devices := make([]Device, 18)
 	for i := range devices {
-		devices[i] = Device{ID: fmt.Sprintf("outlet_%02d", i+1), DisplayName: names[i], Slot: i + 1, SwitchEntity: ids[i], Critical: critical[i+1]}
+		devices[i] = Device{ID: fmt.Sprintf("outlet_%02d", i+1), DisplayName: names[i], Slot: i + 1, SwitchEntity: ids[i], Critical: critical[i+1], HighFrequency: i+1 == 9 || i+1 == 10}
 	}
-	return Snapshot{Schema: 1, Revision: 1, UpdatedAt: time.Now().UTC(), PowerStrips: defaultPowerStrips(), Devices: devices}
+	return Snapshot{Schema: 2, Revision: 1, UpdatedAt: time.Now().UTC(), PowerStrips: defaultPowerStrips(), Devices: devices}
 }
 
 func defaultPowerStrips() []PowerStrip {
-	makeStrip := func(id, name string, start, end int) PowerStrip {
+	makeStrip := func(id, name, host string, start, end int) PowerStrip {
 		prefix := "sensor.tp_link_power_strip_" + id
 		return PowerStrip{
 			ID: id, DisplayName: name, SlotStart: start, SlotEnd: end,
@@ -264,12 +332,12 @@ func defaultPowerStrips() []PowerStrip {
 			PowerEntity:       prefix + "_current_consumption",
 			TodayEnergyEntity: prefix + "_today_s_consumption",
 			MonthEnergyEntity: prefix + "_this_month_s_consumption",
-			OnSinceEntity:     prefix + "_on_since",
+			OnSinceEntity:     prefix + "_on_since", Host: host, PollIntervalSeconds: 2,
 		}
 	}
 	return []PowerStrip{
-		makeStrip("3a31", "3A31 主機", 1, 6),
-		makeStrip("3f2d", "3F2D 副機", 7, 12),
-		makeStrip("bfb9", "BFB9 擴充", 13, 18),
+		makeStrip("3a31", "3A31 主機", "192.168.0.230", 1, 6),
+		makeStrip("3f2d", "3F2D 副機", "192.168.0.38", 7, 12),
+		makeStrip("bfb9", "BFB9 擴充", "192.168.0.46", 13, 18),
 	}
 }

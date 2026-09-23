@@ -61,6 +61,27 @@ func TestOpenMigratesUngroupedSnapshot(t *testing.T) {
 	}
 }
 
+func TestOpenMigratesHighFrequencyDefaults(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "equipment.json")
+	legacy := defaultSnapshot()
+	legacy.Schema = 1
+	for i := range legacy.Devices {
+		legacy.Devices[i].HighFrequency = false
+	}
+	b, _ := json.Marshal(legacy)
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.Snapshot()
+	if got.Schema != 2 || !got.Devices[8].HighFrequency || !got.Devices[9].HighFrequency {
+		t.Fatalf("high-frequency migration failed: schema=%d slot9=%v slot10=%v", got.Schema, got.Devices[8].HighFrequency, got.Devices[9].HighFrequency)
+	}
+}
+
 func TestEquipmentHTTP(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "equipment.json"))
 	if err != nil {

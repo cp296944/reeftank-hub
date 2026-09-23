@@ -20,7 +20,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: go test ./...
-      - run: go vet ./cmd/reeftank-hub ./internal/bootstrap ./internal/config ./internal/dosing ./internal/equipment ./internal/homeassistant ./internal/hubweb ./internal/sheets ./internal/storage ./internal/temperature
+      - run: go vet ./...
       - run: GOOS=linux GOARCH=arm64 go build ./cmd/reeftank-hub
 
   release:

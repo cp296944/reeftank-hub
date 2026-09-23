@@ -12,13 +12,14 @@ func (s *Store) Register(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("PUT /api/hub/equipment/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			SwitchEntity *string `json:"switch_entity"`
-			DisplayName  *string `json:"display_name"`
+			SwitchEntity  *string `json:"switch_entity"`
+			DisplayName   *string `json:"display_name"`
+			HighFrequency *bool   `json:"high_frequency"`
 		}
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
 		dec.DisallowUnknownFields()
-		if err := dec.Decode(&in); err != nil || (in.SwitchEntity == nil && in.DisplayName == nil) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "switch_entity or display_name is required"})
+		if err := dec.Decode(&in); err != nil || (in.SwitchEntity == nil && in.DisplayName == nil && in.HighFrequency == nil) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a supported setting is required"})
 			return
 		}
 		id := strings.TrimSpace(r.PathValue("id"))
@@ -30,6 +31,26 @@ func (s *Store) Register(mux *http.ServeMux) {
 		if err == nil && in.DisplayName != nil {
 			snap, err = s.Rename(id, *in.DisplayName)
 		}
+		if err == nil && in.HighFrequency != nil {
+			snap, err = s.SetHighFrequency(id, *in.HighFrequency)
+		}
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, snap)
+	})
+	mux.HandleFunc("PUT /api/hub/equipment/strips/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			PollIntervalSeconds int `json:"poll_interval_seconds"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "poll_interval_seconds is required"})
+			return
+		}
+		snap, err := s.SetStripPollInterval(strings.TrimSpace(r.PathValue("id")), in.PollIntervalSeconds)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return

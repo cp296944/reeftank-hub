@@ -73,6 +73,10 @@ func (d *DB) migrate(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS dosing_heads(id INTEGER PRIMARY KEY, name TEXT NOT NULL, liquid TEXT, calibration REAL, container_ml REAL, remaining_ml REAL, enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS dosing_audit(id INTEGER PRIMARY KEY, head_id INTEGER, action TEXT NOT NULL, amount_ml REAL, status TEXT NOT NULL, detail TEXT, source_time TEXT NOT NULL, received_time TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS app_settings(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS outlet_samples(device_id TEXT NOT NULL, sampled_at TEXT NOT NULL, voltage REAL NOT NULL, current REAL NOT NULL, power REAL NOT NULL, PRIMARY KEY(device_id,sampled_at))`,
+		`CREATE INDEX IF NOT EXISTS idx_outlet_samples_time ON outlet_samples(sampled_at)`,
+		`CREATE TABLE IF NOT EXISTS equipment_events(id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, duration_seconds REAL, peak_current REAL NOT NULL DEFAULT 0, peak_power REAL NOT NULL DEFAULT 0, samples INTEGER NOT NULL DEFAULT 0)`,
+		`CREATE INDEX IF NOT EXISTS idx_equipment_events_device_time ON equipment_events(device_id,started_at)`,
 		`INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(1,datetime('now'))`,
 		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('retention.entity_samples_days','0',datetime('now'))`,
 		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('temperature.source','direct',datetime('now'))`,
@@ -88,6 +92,67 @@ func (d *DB) migrate(ctx context.Context) error {
 		}
 	}
 	return tx.Commit()
+}
+
+type EquipmentDailyCount struct {
+	Day   string `json:"day"`
+	Count int    `json:"count"`
+}
+
+func (d *DB) RecordOutletSample(ctx context.Context, deviceID string, at time.Time, voltage, current, power float64) error {
+	if _, err := d.db.ExecContext(ctx, `INSERT OR REPLACE INTO outlet_samples(device_id,sampled_at,voltage,current,power) VALUES(?,?,?,?,?)`, deviceID, at.UTC().Format(time.RFC3339Nano), voltage, current, power); err != nil {
+		return err
+	}
+	_, err := d.db.ExecContext(ctx, `DELETE FROM outlet_samples WHERE sampled_at < ?`, at.Add(-24*time.Hour).UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func (d *DB) StartEquipmentEvent(ctx context.Context, deviceID string, at time.Time, current, power float64) (int64, error) {
+	r, err := d.db.ExecContext(ctx, `INSERT INTO equipment_events(device_id,started_at,peak_current,peak_power,samples) VALUES(?,?,?,?,1)`, deviceID, at.UTC().Format(time.RFC3339Nano), current, power)
+	if err != nil {
+		return 0, err
+	}
+	return r.LastInsertId()
+}
+
+func (d *DB) UpdateEquipmentEvent(ctx context.Context, id int64, started, at time.Time, current, power float64, finished bool) error {
+	if finished {
+		_, err := d.db.ExecContext(ctx, `UPDATE equipment_events SET ended_at=?,duration_seconds=?,peak_current=max(peak_current,?),peak_power=max(peak_power,?),samples=samples+1 WHERE id=?`, at.UTC().Format(time.RFC3339Nano), at.Sub(started).Seconds(), current, power, id)
+		return err
+	}
+	_, err := d.db.ExecContext(ctx, `UPDATE equipment_events SET peak_current=max(peak_current,?),peak_power=max(peak_power,?),samples=samples+1 WHERE id=?`, current, power, id)
+	return err
+}
+
+func (d *DB) EquipmentActivity(ctx context.Context, deviceID string, days int, loc *time.Location) (int, []EquipmentDailyCount, error) {
+	if days < 1 {
+		days = 30
+	}
+	since := time.Now().In(loc).AddDate(0, 0, -days+1)
+	start := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
+	rows, err := d.db.QueryContext(ctx, `SELECT started_at FROM equipment_events WHERE device_id=? AND started_at>=? ORDER BY started_at`, deviceID, start.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+	counts := map[string]int{}
+	today := time.Now().In(loc).Format("2006-01-02")
+	for rows.Next() {
+		var raw string
+		if err = rows.Scan(&raw); err != nil {
+			return 0, nil, err
+		}
+		t, e := time.Parse(time.RFC3339Nano, raw)
+		if e == nil {
+			counts[t.In(loc).Format("2006-01-02")]++
+		}
+	}
+	out := make([]EquipmentDailyCount, 0, days)
+	for i := 0; i < days; i++ {
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		out = append(out, EquipmentDailyCount{Day: day, Count: counts[day]})
+	}
+	return counts[today], out, rows.Err()
 }
 
 func (d *DB) RecordTemperature(ctx context.Context, value float64, sourceTime, received time.Time, latency time.Duration) error {

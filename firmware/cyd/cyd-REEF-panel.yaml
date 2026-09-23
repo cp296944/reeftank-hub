@@ -1,0 +1,674 @@
+# =====================================================================
+#  海水缸缸邊面板  ESP32-2432S028R (CYD) 2.8" ILI9341 + XPT2046
+# ---------------------------------------------------------------------
+#  架構：「啞終端」——所有門檻/顏色判斷/數字格式化都在 ReefTank Hub 算好，
+#  ESP32 只負責從 Hub 本機資料庫抓取 /api/panel/status、切開「狀態:內容」並顯示。
+#  ESPHome API 與 OTA 保留給 Home Assistant 管理韌體，但顯示資料不依賴 HA。
+#  顯示資料直接來自 Hub；韌體仍由 ESPHome OTA 編譯與更新。
+# ---------------------------------------------------------------------
+#  主頁一次顯示全部現況；只有右下角「記錄」按鈕會進選單，其他地方點了無反應
+# ---------------------------------------------------------------------
+#  前置需求：CYD 能連到 http://192.168.0.149/api/panel/status
+#  不再依賴 Google 試算表、aquarium_sheets_sync.yaml 或 HA 水質實體。
+# =====================================================================
+
+substitutions:
+  device_name: aquarium-panel
+  friendly_name: "海水缸面板"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+      - light.turn_on:
+          id: backlight
+          brightness: 70%
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    advanced:
+      # log 自己建議的兩項，目的是把 DRAM 擠出來給螢幕緩衝區
+      sram1_as_iram: true
+      minimum_chip_revision: "3.1"
+
+logger:
+  level: INFO
+
+api:
+  id: ha_api
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # 註：原本這裡有 captive_portal，為了讓出記憶體給螢幕緩衝區已移除。
+  #     WiFi 改壞掉的話要用 USB 重新燒錄，不能再用手機連熱點設定。
+  ap:
+    ssid: "${device_name} setup"
+    password: !secret ota_password
+  on_connect:
+    then:
+      - script.execute: refresh_hub
+
+http_request:
+  id: hub_http
+  timeout: 12s
+  useragent: ReefTank-CYD/1.0
+  follow_redirects: true
+
+time:
+  - platform: sntp
+    id: hub_time
+    timezone: Asia/Taipei
+
+# =====================================================================
+#  CYD 硬體腳位 —— 不要改
+# =====================================================================
+spi:
+  - id: tft_bus
+    clk_pin: GPIO14
+    mosi_pin: GPIO13
+    miso_pin: GPIO12
+  - id: touch_bus
+    clk_pin: GPIO25
+    mosi_pin: GPIO32
+    miso_pin: GPIO39
+
+output:
+  - platform: ledc
+    pin: GPIO21
+    id: backlight_output
+  # 板背 RGB LED（共陽極，故 inverted）
+  - platform: ledc
+    pin: GPIO4
+    id: led_r
+    inverted: true
+  - platform: ledc
+    pin: GPIO16
+    id: led_g
+    inverted: true
+  - platform: ledc
+    pin: GPIO17
+    id: led_b
+    inverted: true
+
+light:
+  - platform: monochromatic
+    output: backlight_output
+    name: "螢幕背光"
+    id: backlight
+    restore_mode: ALWAYS_ON
+  - platform: rgb
+    name: "狀態燈"
+    id: status_led
+    red: led_r
+    green: led_g
+    blue: led_b
+    restore_mode: ALWAYS_OFF
+
+globals:
+  - id: cur_page          # 0=主頁 1=選單 2=已記錄
+    type: int
+    initial_value: '0'
+  - id: last_touch_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: screen_asleep
+    type: bool
+    initial_value: 'false'
+  - id: wake_touch_ms      # 螢幕被「這次觸控」喚醒的時間點，0=不是剛喚醒
+    type: uint32_t
+    initial_value: '0'
+  - id: last_action        # page_done 要印哪句話：0=記錄換水 1=重新整理
+    type: int
+    initial_value: '0'
+  - id: hub_connected
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# =====================================================================
+#  從 ReefTank Hub 拉「已經算好、已經格式化」的字串
+#  格式一律是 "狀態:內容"，狀態只有 ok / warn / bad / off 四種，
+#  ESP32 只做 split，不做任何比較或 printf。
+# =====================================================================
+text_sensor:
+  - { platform: template, id: t_temp }
+  - { platform: template, id: t_wc }
+  - { platform: template, id: t_npage }
+  - { platform: template, id: t_elage }
+  - { platform: template, id: t_equip }
+  - { platform: template, id: t_watts }
+  - { platform: template, id: t_kwh }
+  - { platform: template, id: t_led }
+
+  # 六項水質（pH 不上螢幕，但 HA 那邊的 input_number.aq_ph 資料照留）
+  - { platform: template, id: t_no3 }
+  - { platform: template, id: t_po4 }
+  - { platform: template, id: t_sg }
+  - { platform: template, id: t_kh }
+  - { platform: template, id: t_ca }
+  - { platform: template, id: t_mg }
+
+script:
+  - id: refresh_hub
+    mode: restart
+    then:
+      - http_request.get:
+          url: http://192.168.0.149/api/panel/status
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) { id(hub_connected) = false; return; }
+                  bool ok = json::parse_json(body, [](JsonObject root) -> bool {
+                    auto put = [&](const char *key, esphome::text_sensor::TextSensor *target) {
+                      if (!root[key].isNull()) target->publish_state(root[key].as<std::string>());
+                    };
+                    put("temperature", id(t_temp)); put("water_change", id(t_wc));
+                    put("np_age", id(t_npage)); put("elements_age", id(t_elage));
+                    put("equipment", id(t_equip)); put("watts", id(t_watts));
+                    put("kwh", id(t_kwh)); put("led", id(t_led));
+                    put("no3", id(t_no3)); put("po4", id(t_po4)); put("sg", id(t_sg));
+                    put("kh", id(t_kh)); put("ca", id(t_ca)); put("mg", id(t_mg));
+                    return true;
+                  });
+                  id(hub_connected) = ok;
+          on_error:
+            then:
+              - lambda: 'id(hub_connected) = false;'
+
+  - id: record_water_change
+    then:
+      - http_request.post:
+          url: http://192.168.0.149/api/panel/water-change
+          request_headers:
+            Content-Type: application/json
+          body: '{}'
+          capture_response: true
+          on_response:
+            then:
+              - lambda: 'id(hub_connected) = response->status_code >= 200 && response->status_code < 300;'
+              - if:
+                  condition:
+                    lambda: 'return id(hub_connected);'
+                  then:
+                    - script.execute: refresh_hub
+          on_error:
+            then:
+              - lambda: 'id(hub_connected) = false;'
+
+sensor:
+  # 板上光敏電阻，留著給以後做自動背光用，目前沒接進畫面邏輯
+  - platform: adc
+    pin: GPIO34
+    name: "環境亮度"
+    id: ldr
+    attenuation: 12db
+    update_interval: 60s
+
+# =====================================================================
+#  字型
+#  ★ 中文只會編進 glyphs 列出的字。Hub 送來的內容固定在這個字集內：
+#    數字/小數點/正負號、天/前/測於、正常/主馬停止/冷水泵停/蛋白機停/插座關閉、
+#    無資料、換水/記錄/返回/重新整理、已斷線、本月、三大、主馬/冷水機、k/W/h、°/C。
+# =====================================================================
+font:
+  - file: "gfonts://Roboto@700"
+    id: font_num_xl
+    size: 44
+    glyphs: "0123456789.-°C"
+  - file: "gfonts://Roboto@500"
+    id: font_num_m
+    size: 20
+    glyphs: "0123456789.:-"
+  - file: "gfonts://Roboto@500"
+    id: font_num_s
+    size: 19
+    glyphs: "0123456789.-"
+  - file: "gfonts://Roboto@400"
+    id: font_ascii
+    size: 14
+    glyphs: "0123456789.:/ WABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "gfonts://Roboto@500"
+    id: font_ascii_s
+    size: 12
+    glyphs: "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+  - file: "gfonts://Noto Sans TC@500"
+    id: font_tc_l
+    size: 26
+    glyphs: &tc_glyphs
+      - '換'
+      - '水'
+      - '測'
+      - '於'
+      - '天'
+      - '前'
+      - '記'
+      - '錄'
+      - '返'
+      - '回'
+      - '已'
+      - '無'
+      - '資'
+      - '料'
+      - '斷'
+      - '線'
+      - '本'
+      - '月'
+      - '正'
+      - '常'
+      - '主'
+      - '馬'
+      - '停'
+      - '止'
+      - '冷'
+      - '泵'
+      - '蛋'
+      - '白'
+      - '機'
+      - '插'
+      - '座'
+      - '關'
+      - '閉'
+      - '更'
+      - '新'
+      - '重'
+      - '整'
+      - '理'
+      - '質'
+      - '三'
+      - '大'
+      - '上'
+      - '/'
+      - '-'
+      - '0'
+      - '1'
+      - '2'
+      - '3'
+      - '4'
+      - '5'
+      - '6'
+      - '7'
+      - '8'
+      - '9'
+      - '.'
+      - ' '
+      - 'k'
+      - 'W'
+      - 'h'
+  - file: "gfonts://Noto Sans TC@500"
+    id: font_tc
+    size: 19
+    glyphs: *tc_glyphs
+  - file: "gfonts://Noto Sans TC@500"
+    id: font_tc_s
+    size: 14
+    glyphs: *tc_glyphs
+
+color:
+  - id: c_bg
+    hex: "0E1116"
+  - id: c_bar
+    hex: "1F6FEB"
+  - id: c_bottom
+    hex: "161B22"
+  - id: c_white
+    hex: "FFFFFF"
+  - id: c_dim
+    hex: "8B949E"
+  - id: c_line
+    hex: "2A313C"
+  - id: c_ok
+    hex: "3FB950"
+  - id: c_warn
+    hex: "F0883E"
+  - id: c_bad
+    hex: "F85149"
+
+# =====================================================================
+#  畫面
+#  ★ color_palette: "8BIT" —— 這是這次修「Could not allocate buffer for
+#    display!」的關鍵。這片 CYD 沒有可用的 PSRAM 空間給預設的 16-bit
+#    (RGB565) 全螢幕緩衝區（320*240*2 = 153,600 bytes 連續記憶體湊不出
+#    來）。改成 8-bit (RGB332) 緩衝區直接砍半到 76,800 bytes。
+#    代價：只有背景 0E1116 跟底列背景 161B22 這種相近的深色可能會被
+#    量化到同一階、看起來融在一起；白/綠/橘/紅這些拿來標示狀態的顏色
+#    彼此距離夠遠，量化後仍然清楚可辨，不影響你判讀警戒色。
+# =====================================================================
+display:
+  - platform: ili9xxx
+    model: ILI9341
+    id: tft
+    spi_id: tft_bus
+    cs_pin: GPIO15
+    dc_pin: GPIO2
+    invert_colors: false
+    rotation: 90
+    data_rate: 40MHz
+    update_interval: 5s
+    color_palette: "8BIT"
+    pages:
+      # ================= 主頁：一次看完所有現況 =================
+      - id: page_main
+        lambda: |-
+          // 把 Hub 送來的 "狀態:內容" 字串切開，回傳顏色 + 純內容文字
+          auto parse = [&](const std::string &raw, std::string &text) -> Color {
+            auto pos = raw.find(':');
+            std::string status = (pos == std::string::npos) ? "" : raw.substr(0, pos);
+            text = (pos == std::string::npos) ? raw : raw.substr(pos + 1);
+            if (status == "bad") return id(c_bad);
+            if (status == "warn") return id(c_warn);
+            if (status == "off") return id(c_dim);
+            if (status == "ok") return id(c_ok);
+            return id(c_white);
+          };
+
+          it.fill(id(c_bg));
+
+          // ---- 頂列 ----
+          it.filled_rectangle(0, 0, 320, 24, id(c_bar));
+          it.strftime(8, 3, id(font_ascii), id(c_white), TextAlign::TOP_LEFT,
+                      "%m/%d %a", id(hub_time).now());
+          it.strftime(313, 1, id(font_num_m), id(c_white), TextAlign::TOP_RIGHT,
+                      "%H:%M", id(hub_time).now());
+
+          // ---- 水溫（主角）----
+          std::string temp_txt;
+          Color temp_c = parse(id(t_temp).state, temp_txt);
+          it.print(8, 28, id(font_num_xl), temp_c, TextAlign::TOP_LEFT, temp_txt.c_str());
+
+          // ---- 換水天數 ----
+          it.filled_rectangle(184, 30, 1, 50, id(c_line));
+          it.print(196, 30, id(font_tc_s), id(c_dim), "換水");
+          std::string wc_txt;
+          Color wc_c = parse(id(t_wc).state, wc_txt);
+          it.print(313, 46, id(font_tc_l), wc_c, TextAlign::TOP_RIGHT, wc_txt.c_str());
+
+          it.filled_rectangle(6, 86, 308, 1, id(c_line));
+
+          // ---- 六項水質（欄寬不等：NO3/KH 這欄窄，因為都是 x.x 短數字）----
+          //   col0 x=6~66（60寬，NO3/KH/正常 共用這個窄欄，見下方設備狀態）
+          //   col1 x=66~150、col2 x=150~234（各 84 寬，數值比較長）
+          //   col3 x=234~318（84 寬，「測於幾天」兩格）
+          const int col_x[4] = {6, 66, 150, 234};
+          const int col_w[4] = {60, 84, 84, 84};
+          auto cell = [&](int col, int row, const char *label,
+                          esphome::text_sensor::TextSensor *s) {
+            int x = col_x[col];
+            int y = 90 + row * 46;
+            it.print(x + 2, y + 8, id(font_ascii_s), id(c_dim), label);
+            std::string txt;
+            Color c = parse(s->state, txt);
+            it.print(x + col_w[col] - 4, y + 3, id(font_num_s), c, TextAlign::TOP_RIGHT, txt.c_str());
+          };
+
+          cell(0, 0, "NO3", id(t_no3));
+          cell(1, 0, "PO4", id(t_po4));
+          cell(2, 0, "SG",  id(t_sg));
+          cell(0, 1, "KH",  id(t_kh));
+          cell(1, 1, "Ca",  id(t_ca));
+          cell(2, 1, "Mg",  id(t_mg));
+
+          // 右上：NO3/PO4 測於幾天前（不含 pH）
+          it.print(240, 98, id(font_ascii_s), id(c_dim), "NP");
+          std::string npage_txt;
+          Color npage_c = parse(id(t_npage).state, npage_txt);
+          it.print(314, 93, id(font_tc_s), npage_c, TextAlign::TOP_RIGHT, npage_txt.c_str());
+
+          // 右下：KH/Ca/Mg（三大元素）測於幾天前
+          it.print(240, 144, id(font_tc_s), id(c_dim), "三大");
+          std::string elage_txt;
+          Color elage_c = parse(id(t_elage).state, elage_txt);
+          it.print(314, 141, id(font_tc_s), elage_c, TextAlign::TOP_RIGHT, elage_txt.c_str());
+
+          // col0/col1 的分隔線一路貫穿到底列，讓「正常」跟 NO3/KH 對齊成同一欄
+          it.filled_rectangle(65, 90, 1, 150, id(c_line));
+          it.filled_rectangle(149, 90, 1, 92, id(c_line));
+          it.filled_rectangle(233, 90, 1, 92, id(c_line));
+          it.filled_rectangle(6, 182, 308, 1, id(c_line));
+
+          // ---- 底列：正常/主馬停止 獨立窄欄（對齊 NO3/KH），中間放 Watts+本月用電 ----
+          it.filled_rectangle(0, 182, 320, 58, id(c_bottom));
+
+          // 設備狀態這格是特例：正常=綠字，異常=紅底白字（比純變色搶眼），
+          // 所以不走共用的 parse()，自己拆一次狀態字串
+          std::string equip_raw = id(t_equip).state;
+          auto equip_colon = equip_raw.find(':');
+          std::string equip_status = (equip_colon == std::string::npos) ? "" : equip_raw.substr(0, equip_colon);
+          std::string equip_txt = (equip_colon == std::string::npos) ? equip_raw : equip_raw.substr(equip_colon + 1);
+          // x=36：col0 欄（6~66）的水平中心，跟「記錄」一樣用 CENTER 置中；
+          // y=210：跟「記錄」共用的垂直中心線
+          if (equip_status == "bad") {
+            it.filled_rectangle(6, 183, 59, 57, id(c_bad));
+            it.print(36, 210, id(font_tc_s), id(c_white), TextAlign::CENTER, equip_txt.c_str());
+          } else {
+            it.print(36, 210, id(font_tc_s), id(c_ok), TextAlign::CENTER, equip_txt.c_str());
+          }
+
+          // 靠右對齊、錨在按鈕左邊（x=206）：冷水機最高可能到 260W 這種三位數，
+          // 沒辦法精算 Noto Sans TC 實際字寬，靠右對齊至少確保「太長」時是往左邊
+          // 空白背景擠過去，不會被後面畫的「記錄」按鈕蓋字
+          std::string watts_txt;
+          Color watts_c = parse(id(t_watts).state, watts_txt);
+          it.print(206, 196, id(font_tc_s), watts_c, TextAlign::TOP_RIGHT, watts_txt.c_str());
+
+          if (!id(hub_connected)) {
+            it.print(74, 214, id(font_tc_s), id(c_bad), "已斷線");
+          } else {
+            // HA 那邊送來的內容已經是完整格式「本141/上153kWh」，這裡不用再加前綴
+            std::string kwh_txt;
+            Color kwh_c = parse(id(t_kwh).state, kwh_txt);
+            it.print(74, 214, id(font_tc_s), id(c_dim), kwh_txt.c_str());
+          }
+
+          it.filled_rectangle(212, 188, 100, 44, id(c_bar));
+          it.print(262, 210, id(font_tc), id(c_white), TextAlign::CENTER, "記錄");
+
+      # ================= 選單 =================
+      - id: page_menu
+        lambda: |-
+          it.fill(id(c_bg));
+          // 三個按鈕都用 CENTER（水平+垂直都置中），y 取各自矩形的正中央，
+          // 跟主頁「記錄」按鈕同一套對齊方式，不再用 TOP_CENTER 用猜的位置湊
+          it.filled_rectangle(20, 34, 280, 54, id(c_bar));
+          it.print(160, 61, id(font_tc_l), id(c_white), TextAlign::CENTER, "記錄換水");
+          it.filled_rectangle(20, 98, 280, 54, id(c_bar));
+          it.print(160, 125, id(font_tc_l), id(c_white), TextAlign::CENTER, "重新整理");
+          it.filled_rectangle(20, 162, 280, 46, id(c_line));
+          it.print(160, 185, id(font_tc), id(c_dim), TextAlign::CENTER, "返回");
+
+      # ================= 已記錄 / 已同步 =================
+      - id: page_done
+        lambda: |-
+          it.fill(id(c_bg));
+          const char *msg = (id(last_action) == 2) ? "已斷線" : ((id(last_action) == 1) ? "已更新" : "已記錄");
+          it.print(160, 100, id(font_tc_l), id(last_action) == 2 ? id(c_bad) : id(c_ok), TextAlign::TOP_CENTER, msg);
+
+# =====================================================================
+#  觸控
+#  ★ calibration 是這塊板子的通用值。點的位置若有偏移，把上面 logger
+#    的 level 改成 DEBUG，重新上傳後點四個角，看 log 的 raw x/y 再調。
+# =====================================================================
+touchscreen:
+  - platform: xpt2046
+    id: touch
+    spi_id: touch_bus
+    cs_pin: GPIO33
+    interrupt_pin:
+      number: GPIO36
+      mode:
+        input: true
+        pullup: false
+    display: tft
+    threshold: 400
+    calibration:
+      x_min: 280
+      x_max: 3860
+      y_min: 340
+      y_max: 3860
+    transform:
+      swap_xy: true
+    on_touch:
+      - lambda: |-
+          id(last_touch_ms) = millis();
+          if (id(screen_asleep)) {
+            id(screen_asleep) = false;
+            id(wake_touch_ms) = millis();
+            auto call = id(backlight).turn_on();
+            call.set_brightness(0.70f);
+            call.perform();
+          }
+          ESP_LOGD("touch", "x=%d y=%d  raw_x=%d raw_y=%d",
+                   touch.x, touch.y, touch.x_raw, touch.y_raw);
+
+binary_sensor:
+  # ---- 主頁右下角「記錄」----
+  - platform: touchscreen
+    id: btn_open_menu
+    x_min: 206
+    x_max: 320
+    y_min: 190
+    y_max: 240
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(cur_page) == 0 && (id(wake_touch_ms) == 0 || (millis() - id(wake_touch_ms)) > 250);'
+          then:
+            - display.page.show: page_menu
+            - globals.set:
+                id: cur_page
+                value: '1'
+
+  # ---- 選單：記錄換水 ----
+  - platform: touchscreen
+    id: btn_log_wc
+    x_min: 20
+    x_max: 300
+    y_min: 34
+    y_max: 88
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(cur_page) == 1 && (id(wake_touch_ms) == 0 || (millis() - id(wake_touch_ms)) > 250);'
+          then:
+            - script.execute: record_water_change
+            - script.wait: record_water_change
+            - globals.set:
+                id: last_action
+                value: 'id(hub_connected) ? 0 : 2'
+            - display.page.show: page_done
+            - globals.set:
+                id: cur_page
+                value: '2'
+            - delay: 1500ms
+            - display.page.show: page_main
+            - globals.set:
+                id: cur_page
+                value: '0'
+
+  # ---- 選單：直接重新讀取 ReefTank Hub 本機資料 ----
+  - platform: touchscreen
+    id: btn_sync_sheet
+    x_min: 20
+    x_max: 300
+    y_min: 98
+    y_max: 152
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(cur_page) == 1 && (id(wake_touch_ms) == 0 || (millis() - id(wake_touch_ms)) > 250);'
+          then:
+            - script.execute: refresh_hub
+            - script.wait: refresh_hub
+            - globals.set:
+                id: last_action
+                value: 'id(hub_connected) ? 1 : 2'
+            - display.page.show: page_done
+            - globals.set:
+                id: cur_page
+                value: '2'
+            - delay: 1500ms
+            - display.page.show: page_main
+            - globals.set:
+                id: cur_page
+                value: '0'
+
+  # ---- 選單：返回 ----
+  - platform: touchscreen
+    id: btn_back
+    x_min: 20
+    x_max: 300
+    y_min: 162
+    y_max: 208
+    on_press:
+      - if:
+          condition:
+            lambda: 'return id(cur_page) == 1 && (id(wake_touch_ms) == 0 || (millis() - id(wake_touch_ms)) > 250);'
+          then:
+            - display.page.show: page_main
+            - globals.set:
+                id: cur_page
+                value: '0'
+
+interval:
+  # Hub 是唯一顯示資料來源；失敗時保留最後成功值並顯示已斷線。
+  - interval: 30s
+    then:
+      - script.execute: refresh_hub
+
+  # 停在選單 20 秒沒動作就自動回主頁
+  - interval: 5s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(cur_page) == 1 && (millis() - id(last_touch_ms)) > 20000;'
+          then:
+            - display.page.show: page_main
+            - globals.set:
+                id: cur_page
+                value: '0'
+
+  # 狀態燈：顏色也是 HA 算好直接送過來，ESP32 只做字串比對
+  - interval: 15s
+    then:
+      - lambda: |-
+          std::string led = id(t_led).state;
+          if (led == "red") {
+            auto c = id(status_led).turn_on();
+            c.set_rgb(1.0f, 0.0f, 0.0f);
+            c.set_brightness(0.35f);
+            c.perform();
+          } else if (led == "orange") {
+            auto c = id(status_led).turn_on();
+            c.set_rgb(1.0f, 0.35f, 0.0f);
+            c.set_brightness(0.20f);
+            c.perform();
+          } else {
+            auto c = id(status_led).turn_off();
+            c.perform();
+          }
+
+  # 5 分鐘沒碰螢幕 -> 背光關閉（螢幕保護，不是關機，資料仍在更新）
+  - interval: 10s
+    then:
+      - if:
+          condition:
+            lambda: >-
+              return !id(screen_asleep)
+                     && (millis() - id(last_touch_ms)) > (5UL * 60UL * 1000UL);
+          then:
+            - light.turn_off: backlight
+            - globals.set:
+                id: screen_asleep
+                value: 'true'

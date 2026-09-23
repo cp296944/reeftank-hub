@@ -26,9 +26,11 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 		{"/K7/", 200, "k7", "/static/"},
 		{"/K7/mobile.html", 200, "k7", "/static/mobile.html"},
 		{"/dosing/", 200, "魔點四頭滴定", ""},
+		{"/calculator/", 200, "滴定計算工具", ""},
 		{"/power/", 200, "18 路設備", ""},
 		{"/water/", 200, "樹莓派本機資料庫", ""},
 		{"/system/", 200, "系統狀態", ""},
+		{"/thread/", 200, "ESP32-C6 RCP", ""},
 		{"/api/version", 200, "k7", "/api/version"},
 		{"/static/index.html", 200, "k7", "/static/index.html"},
 	}

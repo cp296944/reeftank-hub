@@ -1,0 +1,19 @@
+services:
+  otbr:
+    image: openthread/border-router:latest
+    container_name: reeftank-otbr
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - ${RCP_DEVICE}:${RCP_DEVICE}
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - /opt/reeftank-hub/thread/data:/data
+    environment:
+      OT_RCP_DEVICE: spinel+hdlc+uart://${RCP_DEVICE}?uart-baudrate=460800
+      OT_INFRA_IF: ${INFRA_IF}
+      OT_THREAD_IF: wpan0
+      OT_LOG_LEVEL: "5"

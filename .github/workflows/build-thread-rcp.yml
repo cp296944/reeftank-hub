@@ -1,0 +1,30 @@
+name: Build ESP32-C6 OpenThread RCP
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['rcp-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build RCP
+        working-directory: firmware/esp32c6-ot-rcp
+        run: |
+          idf.py set-target esp32c6
+          idf.py build
+          idf.py merge-bin -o build/reeftank-esp32c6-ot-rcp.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reeftank-esp32c6-ot-rcp
+          path: firmware/esp32c6-ot-rcp/build/reeftank-esp32c6-ot-rcp.bin
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/rcp-v')
+        with:
+          files: firmware/esp32c6-ot-rcp/build/reeftank-esp32c6-ot-rcp.bin

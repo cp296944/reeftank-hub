@@ -27,6 +27,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/dosing"
 	"github.com/cp296944/reeftank-hub/internal/engine"
 	"github.com/cp296944/reeftank-hub/internal/equipment"
+	"github.com/cp296944/reeftank-hub/internal/highfreq"
 	"github.com/cp296944/reeftank-hub/internal/homeassistant"
 	"github.com/cp296944/reeftank-hub/internal/httpapi"
 	"github.com/cp296944/reeftank-hub/internal/hubweb"
@@ -39,6 +40,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/storage"
 	"github.com/cp296944/reeftank-hub/internal/tally"
 	"github.com/cp296944/reeftank-hub/internal/temperature"
+	"github.com/cp296944/reeftank-hub/internal/threadborder"
 	"github.com/cp296944/reeftank-hub/internal/updater"
 	"github.com/cp296944/reeftank-hub/internal/version"
 )
@@ -111,6 +113,7 @@ func run(args []string) error {
 	haSync := homeassistant.NewSyncer(haClient, hubDB, homeassistant.TrackedEntities(equipmentStore.Snapshot()))
 	haAPI := &homeassistant.API{Client: haClient, Equipment: equipmentStore, Sync: haSync}
 	temperaturePoller := temperature.New(cfg.XiaoyuURL, hubDB)
+	highFrequencyMonitor := highfreq.New(equipmentStore, hubDB, tz)
 	if err := hubDB.SeedWaterRecords(context.Background(), storage.BuiltinWaterSeed()); err != nil {
 		return fmt.Errorf("import built-in water records: %w", err)
 	}
@@ -123,6 +126,7 @@ func run(args []string) error {
 	defer stop()
 	go haSync.Run(ctx)
 	go temperaturePoller.Run(ctx)
+	go highFrequencyMonitor.Run(ctx)
 	go func() {
 		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 		defer cancel()
@@ -278,11 +282,12 @@ func run(args []string) error {
 		eng: eng, lamp: lampConn, tally: writeTally, version: version.Version,
 	}
 	panel := &panelAPI{db: hubDB, temp: temperaturePoller, ha: haAPI}
+	threadMonitor := threadborder.New()
 	go diag.run(ctx, time.Hour)
 
 	srv := &http.Server{
 		Addr: cfg.Listen,
-		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, panel.register, func(mux *http.ServeMux) {
+		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, panel.register, threadMonitor.Register, highFrequencyMonitor.Register, func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
 				lampConn.Touch(2 * time.Minute)
 				_, err := lampConn.ReadAll()
@@ -675,6 +680,8 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.6.0": "將 Excel 水質與換水紀錄正式匯入樹莓派 SQLite，新增手動填寫、歷史圖表、最近量測提示、滴定計算工具，以及小魚未來與 HA 水溫來源切換。",
 		"hub-v0.7.0": "新增首頁能源總管、水質量測時效、每項水質獨立圖表與最近換水資訊，改善 K7 導覽和連線控制，並提供 CYD 螢幕使用的 Hub 狀態與換水 API。",
 		"hub-v0.7.1": "修正第二筆之後的手動水質或換水紀錄因空白來源識別碼重複而無法儲存的問題；儲存失敗時也會直接顯示後端原因，方便判斷輸入或資料庫錯誤。",
+		"hub-v0.8.0": "新增水質與換水紀錄編輯、刪除及水量顯示，整理輸入表單與三欄歷史圖表；補上系統入口圖示、溫度來源與取樣頻率設定，並讓版本視窗直接顯示更新摘要。",
+		"hub-v0.9.0": "新增HS300直連高頻監控、排插輪詢秒數與逐插座開關，統計捲棉及補水每日運作次數與圖表；獨立滴定計算模組，加入ESP32-C6 RCP與OTBR管理狀態頁。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

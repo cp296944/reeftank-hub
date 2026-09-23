@@ -277,11 +277,12 @@ func run(args []string) error {
 		dataDir: cfg.DataDir, started: started,
 		eng: eng, lamp: lampConn, tally: writeTally, version: version.Version,
 	}
+	panel := &panelAPI{db: hubDB, temp: temperaturePoller, ha: haAPI}
 	go diag.run(ctx, time.Hour)
 
 	srv := &http.Server{
 		Addr: cfg.Listen,
-		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, func(mux *http.ServeMux) {
+		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, panel.register, func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
 				lampConn.Touch(2 * time.Minute)
 				_, err := lampConn.ReadAll()

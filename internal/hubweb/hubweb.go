@@ -50,6 +50,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && isModulePath(r.URL.Path):
 		h.serveModule(w, r)
 	case strings.HasPrefix(r.URL.Path, "/hub-assets/"):
+		// Hub assets are embedded in each binary. Prevent an OTA from leaving the
+		// browser on an older JavaScript UI with a newer API schema.
+		w.Header().Set("Cache-Control", "no-store")
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = strings.TrimPrefix(r.URL.Path, "/hub-assets")
 		h.assets.ServeHTTP(w, r2)
@@ -79,12 +82,12 @@ func (h *handler) serveModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	replacements := map[string][3]string{
-		"dosing": {"魔點四頭滴定", "校正、容器、排程與手動滴定", "完整模擬模式；BLE 實機驗證待設備旁操作。"},
+		"dosing":     {"魔點四頭滴定", "校正、容器、排程與手動滴定", "完整模擬模式；BLE 實機驗證待設備旁操作。"},
 		"calculator": {"滴定計算工具", "水量、濃度與安全劑量換算", "純計算；不會啟動、設定或傳送資料到滴定機。"},
-		"power":  {"電源監控", "三組排插與 18 路設備", "Home Assistant 即時狀態與 Hub 本機歷史。"},
-		"water":  {"水質、水溫與換水", "樹莓派本機資料庫", "手動紀錄、完整歷史與獨立溫度來源。"},
-		"system": {"系統狀態", "連線、版本、備份與 OTA", "檢查資料來源、資料庫及更新狀態。"},
-		"thread": {"Thread / Matter", "ESP32-C6 RCP與樹莓派OTBR", "管理USB無線電、Thread邊界路由器與HA Matter連線。"},
+		"power":      {"電源監控", "三組排插與 18 路設備", "Home Assistant 即時狀態與 Hub 本機歷史。"},
+		"water":      {"水質、水溫與換水", "樹莓派本機資料庫", "手動紀錄、完整歷史與獨立溫度來源。"},
+		"system":     {"系統狀態", "連線、版本、備份與 OTA", "檢查資料來源、資料庫及更新狀態。"},
+		"thread":     {"Thread / Matter", "ESP32-C6 RCP與樹莓派OTBR", "管理USB無線電、Thread邊界路由器與HA Matter連線。"},
 	}
 	copyText := string(b)
 	info := replacements[name]

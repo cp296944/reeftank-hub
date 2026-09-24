@@ -134,7 +134,12 @@ func (d *DB) TemperatureHistory(ctx context.Context, hours int) ([]map[string]an
 	if hours <= 0 || hours > 24*3660 {
 		hours = 24 * 30
 	}
-	rows, err := d.db.QueryContext(ctx, `SELECT value,source_time,latency_ms FROM temperature_samples WHERE source_time>=? ORDER BY source_time`, time.Now().Add(-time.Duration(hours)*time.Hour).UTC().Format(time.RFC3339Nano))
+	since := time.Now().Add(-time.Duration(hours) * time.Hour).UTC().Format(time.RFC3339Nano)
+	bucket := int64(hours * 3600 / 1800)
+	if bucket < 1 {
+		bucket = 1
+	}
+	rows, err := d.db.QueryContext(ctx, `SELECT avg(value),max(source_time),CAST(avg(COALESCE(latency_ms,0)) AS INTEGER) FROM temperature_samples WHERE source_time>=? GROUP BY CAST(strftime('%s',source_time)/? AS INTEGER) ORDER BY max(source_time)`, since, bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +192,35 @@ func (d *DB) LatestHATemperature(ctx context.Context) (float64, time.Time, bool)
 
 func (d *DB) registerWater(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hub/water", func(w http.ResponseWriter, r *http.Request) {
+		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+		if days < 0 || days > 36500 {
+			days = 30
+		}
 		v, e := d.WaterDashboard(r.Context())
 		if e != nil {
 			writeJSON(w, 500, map[string]string{"error": e.Error()})
 			return
 		}
-		h, _ := d.TemperatureHistory(r.Context(), 24*3660)
+		if days > 0 {
+			cutoff := time.Now().AddDate(0, 0, -days)
+			if history, ok := v["history"].(map[string][]map[string]any); ok {
+				for metric, points := range history {
+					filtered := points[:0]
+					for _, point := range points {
+						raw, _ := point["time"].(string)
+						if at, err := time.Parse(time.RFC3339Nano, raw); err == nil && !at.Before(cutoff) {
+							filtered = append(filtered, point)
+						}
+					}
+					history[metric] = filtered
+				}
+			}
+		}
+		hours := 24 * 3660
+		if days > 0 {
+			hours = days * 24
+		}
+		h, _ := d.TemperatureHistory(r.Context(), hours)
 		v["temperature_history"] = h
 		v["temperature_source"] = d.Setting(r.Context(), "temperature.source", "direct")
 		writeJSON(w, 200, v)

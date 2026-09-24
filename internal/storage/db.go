@@ -99,6 +99,41 @@ type EquipmentDailyCount struct {
 	Count int    `json:"count"`
 }
 
+type EquipmentEvent struct {
+	ID              int64    `json:"id"`
+	DeviceID        string   `json:"device_id"`
+	StartedAt       string   `json:"started_at"`
+	EndedAt         *string  `json:"ended_at,omitempty"`
+	DurationSeconds *float64 `json:"duration_seconds,omitempty"`
+	PeakCurrent     float64  `json:"peak_current"`
+	PeakPower       float64  `json:"peak_power"`
+	Samples         int      `json:"samples"`
+}
+
+func (d *DB) EquipmentEvents(ctx context.Context, deviceID string, days, limit int, loc *time.Location) ([]EquipmentEvent, error) {
+	if days <= 0 || days > 36500 {
+		days = 36500
+	}
+	if limit <= 0 || limit > 5000 {
+		limit = 1000
+	}
+	since := time.Now().In(loc).AddDate(0, 0, -days)
+	rows, err := d.db.QueryContext(ctx, `SELECT id,device_id,started_at,ended_at,duration_seconds,peak_current,peak_power,samples FROM equipment_events WHERE device_id=? AND started_at>=? ORDER BY started_at DESC LIMIT ?`, deviceID, since.UTC().Format(time.RFC3339Nano), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []EquipmentEvent{}
+	for rows.Next() {
+		var e EquipmentEvent
+		if err := rows.Scan(&e.ID, &e.DeviceID, &e.StartedAt, &e.EndedAt, &e.DurationSeconds, &e.PeakCurrent, &e.PeakPower, &e.Samples); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 func (d *DB) RecordOutletSample(ctx context.Context, deviceID string, at time.Time, voltage, current, power float64) error {
 	if _, err := d.db.ExecContext(ctx, `INSERT OR REPLACE INTO outlet_samples(device_id,sampled_at,voltage,current,power) VALUES(?,?,?,?,?)`, deviceID, at.UTC().Format(time.RFC3339Nano), voltage, current, power); err != nil {
 		return err
@@ -192,18 +227,35 @@ func (d *DB) BackfillEquipmentEvents(ctx context.Context, deviceID string, since
 }
 
 func (d *DB) EquipmentActivity(ctx context.Context, deviceID string, days int, loc *time.Location) (int, []EquipmentDailyCount, error) {
-	if days < 1 {
-		days = 30
+	now := time.Now().In(loc)
+	var start time.Time
+	if days <= 0 {
+		var raw sql.NullString
+		if err := d.db.QueryRowContext(ctx, `SELECT min(started_at) FROM equipment_events WHERE device_id=?`, deviceID).Scan(&raw); err != nil {
+			return 0, nil, err
+		}
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		if raw.Valid {
+			if first, err := time.Parse(time.RFC3339Nano, raw.String); err == nil {
+				local := first.In(loc)
+				start = time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+			}
+		}
+		days = int(now.Sub(start).Hours()/24) + 1
+	} else {
+		if days > 36500 {
+			days = 36500
+		}
+		since := now.AddDate(0, 0, -days+1)
+		start = time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
 	}
-	since := time.Now().In(loc).AddDate(0, 0, -days+1)
-	start := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, loc)
 	rows, err := d.db.QueryContext(ctx, `SELECT started_at FROM equipment_events WHERE device_id=? AND started_at>=? ORDER BY started_at`, deviceID, start.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return 0, nil, err
 	}
 	defer rows.Close()
 	counts := map[string]int{}
-	today := time.Now().In(loc).Format("2006-01-02")
+	today := now.Format("2006-01-02")
 	for rows.Next() {
 		var raw string
 		if err = rows.Scan(&raw); err != nil {

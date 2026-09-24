@@ -1,4 +1,4 @@
-// Permit only the ReefTank Hub service account to start four fixed Thread
+// Permit only the ReefTank Hub service account to start five fixed Thread
 // maintenance units. No arbitrary unit name or verb is accepted.
 polkit.addRule(function(action, subject) {
     if (action.id != "org.freedesktop.systemd1.manage-units" ||
@@ -7,5 +7,6 @@ polkit.addRule(function(action, subject) {
     if (unit == "reeftank-thread-flash.service" ||
         unit == "reeftank-thread-install.service" ||
         unit == "reeftank-thread-restart.service" ||
+        unit == "reeftank-thread-dataset.service" ||
         unit == "reeftank-thread-rollback.service") return polkit.Result.YES;
 });

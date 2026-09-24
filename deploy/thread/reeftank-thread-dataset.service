@@ -1,0 +1,10 @@
+[Unit]
+Description=ReefTank Hub apply an existing Thread operational dataset
+After=docker.service
+ConditionPathExists=/opt/reeftank-hub/thread/pending/dataset.tlv
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/reeftank-hub/thread/bin/apply-dataset.sh
+TimeoutStartSec=2min

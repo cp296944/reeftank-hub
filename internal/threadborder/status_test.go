@@ -8,6 +8,20 @@ import (
 	"testing"
 )
 
+func TestParseDatasetTLVReturnsOnlyNonSecretSummary(t *testing.T) {
+	raw := "00030000160208112233445566778803084170706c654e657401021234051000112233445566778899aabbccddeeff"
+	summary, normalized, err := parseDatasetTLV(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized == "" || summary["network_name"] != "AppleNet" || summary["channel"] != 22 || summary["pan_id"] != "0x1234" {
+		t.Fatalf("summary=%v", summary)
+	}
+	if _, leaked := summary["network_key"]; leaked {
+		t.Fatal("network key leaked in summary")
+	}
+}
+
 func TestSnapshotReadsRCPAndOTBR(t *testing.T) {
 	dir := t.TempDir()
 	rcp := filepath.Join(dir, "rcp")

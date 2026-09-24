@@ -687,6 +687,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.3": "修正OTA僅更新單一執行檔時Thread部署腳本不存在的問題；維護腳本改裝至固定路徑，不再依賴每次更新會切換的current版本目錄。",
 		"hub-v0.9.4": "水質頁九張歷史圖表統一為3×3；修正短暫捲棉運轉因要求連續兩筆高值而漏記，並由24小時原始樣本冪等回補。另修正C6啟動後可變資料造成的二次驗證誤報。",
 		"hub-v0.9.5": "完成C6與OTBR實機相容修正：改用Debian Compose支援的ttyACM0映射、讓Hub唯讀辨識OTBR設定，並為REST狀態查詢加入JSON:API Accept標頭。",
+		"hub-v0.9.6": "水質九圖依水溫、NP、三大元素、鹽度與設備紀錄重排，新增全期至一年區間、捲棉與補水逐次明細；距今精準至小時，Thread頁可安全驗證並套用既有Apple網路TLV。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

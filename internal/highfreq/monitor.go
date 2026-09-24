@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -219,6 +220,10 @@ func (m *Monitor) accept(ctx context.Context, d equipment.Device, r outletReadin
 
 func (m *Monitor) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hub/high-frequency", func(w http.ResponseWriter, r *http.Request) {
+		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+		if days < 0 || days > 36500 {
+			days = 30
+		}
 		snap := m.equipment.Snapshot()
 		m.mu.RLock()
 		statuses := map[string]DeviceStatus{}
@@ -234,10 +239,14 @@ func (m *Monitor) Register(mux *http.ServeMux) {
 			s.ID = d.ID
 			s.Name = d.DisplayName
 			s.Enabled = true
-			s.TodayCount, s.History, _ = m.db.EquipmentActivity(r.Context(), d.ID, 30, m.loc)
+			s.TodayCount, s.History, _ = m.db.EquipmentActivity(r.Context(), d.ID, days, m.loc)
 			statuses[d.ID] = s
 		}
+		events := map[string][]storage.EquipmentEvent{}
+		for _, id := range []string{"outlet_09", "outlet_10"} {
+			events[id], _ = m.db.EquipmentEvents(r.Context(), id, days, 1000, m.loc)
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(map[string]any{"devices": statuses, "updated_at": time.Now()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"devices": statuses, "events": events, "days": days, "updated_at": time.Now()})
 	})
 }

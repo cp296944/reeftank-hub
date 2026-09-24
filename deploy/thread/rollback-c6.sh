@@ -11,5 +11,4 @@ backup=$(find "${root}/backups" -maxdepth 1 -type f -name 'c6-*.bin' | sort | ta
 sha256sum -c "${backup}.sha256"
 docker stop reeftank-otbr >/dev/null 2>&1 || true
 "${root}/tools/bin/python" -m esptool --chip esp32c6 --port "${radios[0]}" --baud 460800 write-flash 0x0 "${backup}"
-"${root}/tools/bin/python" -m esptool --chip esp32c6 --port "${radios[0]}" verify-flash 0x0 "${backup}"
-echo "C6 backup restored and verified: ${backup}"
+echo "C6 backup restored and write-hash verified: ${backup}"

@@ -685,6 +685,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.1": "設備插座對應設定改為固定展開，補水與捲棉每日運作圖表移至水質頁並自電源頁移除；Hub前端資源停用瀏覽器快取，避免OTA後仍顯示舊介面。",
 		"hub-v0.9.2": "完成Thread管理工作流：C6原始Flash備份、固定RCP韌體雜湊驗證、刷寫讀回驗證與一鍵回滾；加入Docker／OTBR安裝修復、重啟及Hub頁面工作狀態控制。",
 		"hub-v0.9.3": "修正OTA僅更新單一執行檔時Thread部署腳本不存在的問題；維護腳本改裝至固定路徑，不再依賴每次更新會切換的current版本目錄。",
+		"hub-v0.9.4": "水質頁九張歷史圖表統一為3×3；修正短暫捲棉運轉因要求連續兩筆高值而漏記，並由24小時原始樣本冪等回補。另修正C6啟動後可變資料造成的二次驗證誤報。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

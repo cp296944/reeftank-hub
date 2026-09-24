@@ -124,6 +124,73 @@ func (d *DB) UpdateEquipmentEvent(ctx context.Context, id int64, started, at tim
 	return err
 }
 
+// BackfillEquipmentEvents rebuilds missing activity starts from the retained
+// raw outlet samples.  It is deliberately idempotent: an event with the exact
+// device/start timestamp is never inserted twice.  A single sample above the
+// threshold is enough because short top-off and roller runs can fit between
+// two polls; voltage must still be in the normal mains range to reject noise.
+func (d *DB) BackfillEquipmentEvents(ctx context.Context, deviceID string, since time.Time) (int, error) {
+	rows, err := d.db.QueryContext(ctx, `SELECT sampled_at,voltage,current,power FROM outlet_samples WHERE device_id=? AND sampled_at>=? ORDER BY sampled_at`, deviceID, since.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	type event struct {
+		start, end  time.Time
+		peakCurrent float64
+		peakPower   float64
+		samples     int
+	}
+	var active *event
+	events := []event{}
+	for rows.Next() {
+		var raw string
+		var voltage, current, power float64
+		if err = rows.Scan(&raw, &voltage, &current, &power); err != nil {
+			return 0, err
+		}
+		at, parseErr := time.Parse(time.RFC3339Nano, raw)
+		if parseErr != nil {
+			continue
+		}
+		running := voltage >= 80 && voltage <= 140 && (current >= .005 || power >= .5)
+		if running {
+			if active == nil {
+				active = &event{start: at, end: at}
+			}
+			active.end = at
+			active.samples++
+			if current > active.peakCurrent {
+				active.peakCurrent = current
+			}
+			if power > active.peakPower {
+				active.peakPower = power
+			}
+		} else if active != nil {
+			active.end = at
+			events = append(events, *active)
+			active = nil
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return 0, err
+	}
+	if active != nil {
+		events = append(events, *active)
+	}
+	inserted := 0
+	for _, e := range events {
+		result, execErr := d.db.ExecContext(ctx, `INSERT INTO equipment_events(device_id,started_at,ended_at,duration_seconds,peak_current,peak_power,samples) SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM equipment_events WHERE device_id=? AND started_at=?)`, deviceID, e.start.UTC().Format(time.RFC3339Nano), e.end.UTC().Format(time.RFC3339Nano), e.end.Sub(e.start).Seconds(), e.peakCurrent, e.peakPower, e.samples, deviceID, e.start.UTC().Format(time.RFC3339Nano))
+		if execErr != nil {
+			return inserted, execErr
+		}
+		if n, _ := result.RowsAffected(); n > 0 {
+			inserted++
+		}
+	}
+	return inserted, nil
+}
+
 func (d *DB) EquipmentActivity(ctx context.Context, deviceID string, days int, loc *time.Location) (int, []EquipmentDailyCount, error) {
 	if days < 1 {
 		days = 30

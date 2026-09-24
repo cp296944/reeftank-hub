@@ -97,3 +97,37 @@ func TestManualWaterRecordsAllowMultipleEmptySourceRefs(t *testing.T) {
 		}
 	}
 }
+
+func TestBackfillEquipmentEventsCountsShortSingleSampleRun(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	base := time.Date(2026, 9, 24, 1, 0, 0, 0, time.UTC)
+	for i, watts := range []float64{0.05, 3.3, 0.04, 0.03} {
+		if err := db.RecordOutletSample(ctx, "outlet_09", base.Add(time.Duration(i)*2*time.Second), 117, watts/117, watts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for run := 0; run < 2; run++ {
+		n, err := db.BackfillEquipmentEvents(ctx, "outlet_09", base.Add(-time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (run == 0 && n != 1) || (run == 1 && n != 0) {
+			t.Fatalf("run %d inserted %d events", run, n)
+		}
+	}
+	today, history, err := db.EquipmentActivity(ctx, "outlet_09", 1, time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 {
+		t.Fatalf("history length=%d", len(history))
+	}
+	if today != 1 {
+		t.Fatalf("today count=%d", today)
+	}
+}

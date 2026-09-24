@@ -38,8 +38,11 @@ backup="${root}/backups/c6-${stamp}.bin"
 sha256sum "${backup}" > "${backup}.sha256"
 
 "${esptool[@]}" --baud 460800 write-flash 0x0 "${root}/firmware/${asset}"
-"${esptool[@]}" verify-flash 0x0 "${root}/firmware/${asset}"
+# write-flash performs an immediate ROM/stub hash verification before reset.
+# Do not run a second whole-image verify after boot: the firmware may
+# initialise mutable data inside the merged image range, producing a false
+# mismatch even though the write-time hash verification succeeded.
 printf 'tag=%s\nsha256=%s\ndevice=%s\nflashed_at=%s\nbackup=%s\n' \
   "${tag}" "${expected}" "${device}" "$(date -u +%FT%TZ)" "${backup}" > "${root}/firmware/current"
 chmod 0644 "${root}/firmware/current"
-echo "C6 RCP flashed and verified: ${tag}"
+echo "C6 RCP flashed and write-hash verified: ${tag}"

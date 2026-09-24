@@ -47,6 +47,15 @@ func New(eq *equipment.Store, db *storage.DB, loc *time.Location) *Monitor {
 }
 
 func (m *Monitor) Run(ctx context.Context) {
+	for _, d := range m.equipment.Snapshot().Devices {
+		if d.HighFrequency {
+			if n, err := m.db.BackfillEquipmentEvents(ctx, d.ID, time.Now().Add(-24*time.Hour)); err != nil {
+				slog.Warn("backfill equipment activity", "device", d.ID, "err", err)
+			} else if n > 0 {
+				slog.Info("backfilled equipment activity", "device", d.ID, "events", n)
+			}
+		}
+	}
 	var wg sync.WaitGroup
 	for _, strip := range m.equipment.Snapshot().PowerStrips {
 		s := strip
@@ -184,7 +193,7 @@ func (m *Monitor) accept(ctx context.Context, d equipment.Device, r outletReadin
 		det.low++
 		det.high = 0
 	}
-	if !det.active && det.high >= 2 {
+	if !det.active && det.high >= 1 {
 		det.active = true
 		det.started = at
 		id, e := m.db.StartEquipmentEvent(ctx, d.ID, at, r.Current, r.Power)

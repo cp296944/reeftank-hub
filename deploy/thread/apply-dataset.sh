@@ -15,9 +15,16 @@ if current=$(docker exec reeftank-otbr ot-ctl dataset active -x 2>/dev/null | aw
   umask 077
   printf '%s\n' "${current}" > "${backup}"
 fi
-printf 'dataset set active %s\nifconfig up\nthread start\n' "${tlv}" | docker exec -i reeftank-otbr ot-ctl
-sleep 5
-state=$(docker exec reeftank-otbr ot-ctl state | head -1)
+docker exec reeftank-otbr ot-ctl dataset set active "${tlv}"
+docker exec reeftank-otbr ot-ctl ifconfig up
+docker exec reeftank-otbr ot-ctl thread start
+state=disabled
+for _ in {1..15}; do
+  sleep 2
+  state=$(docker exec reeftank-otbr ot-ctl state | head -1)
+  [[ ${state} == router || ${state} == leader || ${state} == child ]] && break
+done
+[[ ${state} == router || ${state} == leader || ${state} == child ]] || { echo "Thread failed to attach; state=${state}" >&2; exit 4; }
 printf 'applied_at=%s\nstate=%s\n' "$(date -u +%FT%TZ)" "${state}" > "${root}/datasets/current"
 chmod 0644 "${root}/datasets/current"
 echo "Thread dataset applied; state=${state}"

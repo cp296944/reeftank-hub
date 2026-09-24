@@ -17,7 +17,7 @@ done
 if [[ ${state:-} == router || ${state:-} == leader || ${state:-} == child ]]; then
   network_name=$(docker exec reeftank-otbr ot-ctl networkname | head -1 | tr -d '\r')
   channel=$(docker exec reeftank-otbr ot-ctl channel | head -1 | tr -d '\r')
-  install -d -m 0700 "${root}/datasets"
+  install -d -m 0711 "${root}/datasets"
   printf 'observed_at=%s\nstate=%s\nnetwork_name=%s\nchannel=%s\n' "$(date -u +%FT%TZ)" "${state}" "${network_name}" "${channel}" > "${root}/datasets/current"
   chmod 0644 "${root}/datasets/current"
 fi

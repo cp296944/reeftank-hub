@@ -9,7 +9,7 @@ trap 'rm -f "${pending}"' EXIT
 tlv=$(tr -d '\r\n[:space:]' < "${pending}")
 [[ ${tlv} =~ ^[0-9A-Fa-f]+$ && $((${#tlv} % 2)) -eq 0 && ${#tlv} -ge 40 && ${#tlv} -le 2048 ]] || { echo "Invalid Thread dataset TLV." >&2; exit 3; }
 
-mkdir -p "${root}/datasets"
+install -d -m 0711 "${root}/datasets"
 if current=$(docker exec reeftank-otbr ot-ctl dataset active -x 2>/dev/null | awk '/^[0-9A-Fa-f]+$/ {print; exit}') && [[ -n ${current} ]]; then
   backup="${root}/datasets/active-$(date -u +%Y%m%dT%H%M%SZ).tlv"
   umask 077

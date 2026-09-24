@@ -49,6 +49,10 @@ install -d -m 0750 "${root}/data"
 install -m 0644 "${script_dir}/compose.yaml" "${root}/compose.yaml"
 umask 077
 printf 'RCP_DEVICE=%s\nINFRA_IF=%s\n' "${rcp_device}" "${infra_if}" > "${root}/.env"
+if getent group reefhub >/dev/null 2>&1; then
+  chown root:reefhub "${root}/.env"
+  chmod 0640 "${root}/.env"
+fi
 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 printf 'net.ipv6.conf.all.forwarding=1\n' > /etc/sysctl.d/90-reeftank-thread.conf
 "${compose[@]}" --project-directory "${root}" -f "${root}/compose.yaml" pull

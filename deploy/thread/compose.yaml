@@ -8,10 +8,8 @@ services:
       - NET_ADMIN
       - NET_RAW
     devices:
-      - source: ${RCP_DEVICE}
-        target: /dev/ttyACM0
-      - source: /dev/net/tun
-        target: /dev/net/tun
+      - "${RCP_DEVICE}:/dev/ttyACM0"
+      - "/dev/net/tun:/dev/net/tun"
     volumes:
       - /opt/reeftank-hub/thread/data:/data
     environment:

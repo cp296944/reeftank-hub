@@ -73,7 +73,13 @@ func (m *Monitor) Snapshot() Status {
 		_, err = os.Stat(s.RCPDevice)
 		s.RCPPresent = err == nil
 	}
-	resp, err := m.Client.Get(m.RESTURL)
+	req, err := http.NewRequest(http.MethodGet, m.RESTURL, nil)
+	if err != nil {
+		s.Error = err.Error()
+		return s
+	}
+	req.Header.Set("Accept", "application/vnd.api+json")
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		s.Error = err.Error()
 		return s

@@ -17,3 +17,5 @@ services:
       OT_INFRA_IF: ${INFRA_IF}
       OT_THREAD_IF: wpan0
       OT_LOG_LEVEL: "5"
+      OT_REST_LISTEN_ADDR: ${REST_LISTEN_ADDR}
+      OT_REST_LISTEN_PORT: "8081"

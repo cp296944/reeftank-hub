@@ -25,7 +25,8 @@ else
   rcp_device="$(readlink -f "${radios[0]}")"
 fi
 infra_if="${INFRA_IF:-$(ip route show default | awk 'NR==1 {print $5}')}"
-if [[ -z "${infra_if}" || ! -e "${rcp_device}" ]]; then
+rest_listen_addr="${REST_LISTEN_ADDR:-$(ip -4 -o addr show dev "${infra_if}" scope global | awk 'NR==1 {split($4,a,"/"); print a[1]}')}"
+if [[ -z "${infra_if}" || -z "${rest_listen_addr}" || ! -e "${rcp_device}" ]]; then
   echo "Unable to resolve Ethernet interface or C6 serial device." >&2
   exit 4
 fi
@@ -48,7 +49,7 @@ fi
 install -d -m 0750 "${root}/data"
 install -m 0644 "${script_dir}/compose.yaml" "${root}/compose.yaml"
 umask 077
-printf 'RCP_DEVICE=%s\nINFRA_IF=%s\n' "${rcp_device}" "${infra_if}" > "${root}/.env"
+printf 'RCP_DEVICE=%s\nINFRA_IF=%s\nREST_LISTEN_ADDR=%s\n' "${rcp_device}" "${infra_if}" "${rest_listen_addr}" > "${root}/.env"
 if getent group reefhub >/dev/null 2>&1; then
   chown root:reefhub "${root}/.env"
   chmod 0640 "${root}/.env"

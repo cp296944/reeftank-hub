@@ -5,5 +5,5 @@ After=docker.service
 [Service]
 Type=oneshot
 User=root
-ExecStart=/opt/reeftank-hub/current/deploy/thread/restart.sh
+ExecStart=/opt/reeftank-hub/thread/bin/restart.sh
 TimeoutStartSec=5min

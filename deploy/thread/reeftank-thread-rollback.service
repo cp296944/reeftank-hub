@@ -5,5 +5,5 @@ After=network-online.target
 [Service]
 Type=oneshot
 User=root
-ExecStart=/opt/reeftank-hub/current/deploy/thread/rollback-c6.sh --confirm
+ExecStart=/opt/reeftank-hub/thread/bin/rollback-c6.sh --confirm
 TimeoutStartSec=20min

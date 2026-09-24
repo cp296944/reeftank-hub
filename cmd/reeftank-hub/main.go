@@ -684,6 +684,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.0": "新增HS300直連高頻監控、排插輪詢秒數與逐插座開關，統計捲棉及補水每日運作次數與圖表；獨立滴定計算模組，加入ESP32-C6 RCP與OTBR管理狀態頁。",
 		"hub-v0.9.1": "設備插座對應設定改為固定展開，補水與捲棉每日運作圖表移至水質頁並自電源頁移除；Hub前端資源停用瀏覽器快取，避免OTA後仍顯示舊介面。",
 		"hub-v0.9.2": "完成Thread管理工作流：C6原始Flash備份、固定RCP韌體雜湊驗證、刷寫讀回驗證與一鍵回滾；加入Docker／OTBR安裝修復、重啟及Hub頁面工作狀態控制。",
+		"hub-v0.9.3": "修正OTA僅更新單一執行檔時Thread部署腳本不存在的問題；維護腳本改裝至固定路徑，不再依賴每次更新會切換的current版本目錄。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

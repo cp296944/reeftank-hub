@@ -25,6 +25,8 @@ for _ in {1..15}; do
   [[ ${state} == router || ${state} == leader || ${state} == child ]] && break
 done
 [[ ${state} == router || ${state} == leader || ${state} == child ]] || { echo "Thread failed to attach; state=${state}" >&2; exit 4; }
-printf 'applied_at=%s\nstate=%s\n' "$(date -u +%FT%TZ)" "${state}" > "${root}/datasets/current"
+network_name=$(docker exec reeftank-otbr ot-ctl networkname | head -1)
+channel=$(docker exec reeftank-otbr ot-ctl channel | head -1)
+printf 'applied_at=%s\nstate=%s\nnetwork_name=%s\nchannel=%s\n' "$(date -u +%FT%TZ)" "${state}" "${network_name}" "${channel}" > "${root}/datasets/current"
 chmod 0644 "${root}/datasets/current"
 echo "Thread dataset applied; state=${state}"

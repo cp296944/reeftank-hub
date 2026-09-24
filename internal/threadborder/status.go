@@ -56,6 +56,16 @@ func (m *Monitor) Snapshot() Status {
 			}
 		}
 	}
+	if b, err := os.ReadFile("/opt/reeftank-hub/thread/datasets/current"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			switch {
+			case strings.HasPrefix(line, "state="):
+				s.Role = strings.TrimSpace(strings.TrimPrefix(line, "state="))
+			case strings.HasPrefix(line, "network_name="):
+				s.Network = strings.TrimSpace(strings.TrimPrefix(line, "network_name="))
+			}
+		}
+	}
 	for action, unit := range jobUnits {
 		out, err := exec.Command("systemctl", "is-active", unit).Output()
 		state := strings.TrimSpace(string(out))
@@ -107,8 +117,12 @@ func (m *Monitor) Snapshot() Status {
 				attributes = a
 			}
 		}
-		s.Role, _ = attributes["role"].(string)
-		s.Network, _ = attributes["networkName"].(string)
+		if role, ok := attributes["role"].(string); ok && role != "" {
+			s.Role = role
+		}
+		if network, ok := attributes["networkName"].(string); ok && network != "" {
+			s.Network = network
+		}
 	}
 	return s
 }

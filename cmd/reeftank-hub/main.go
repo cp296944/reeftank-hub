@@ -689,6 +689,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.5": "完成C6與OTBR實機相容修正：改用Debian Compose支援的ttyACM0映射、讓Hub唯讀辨識OTBR設定，並為REST狀態查詢加入JSON:API Accept標頭。",
 		"hub-v0.9.6": "水質九圖依水溫、NP、三大元素、鹽度與設備紀錄重排，新增全期至一年區間、捲棉與補水逐次明細；距今精準至小時，Thread頁可安全驗證並套用既有Apple網路TLV。",
 		"hub-v0.9.7": "修正OTBR容器只執行首個stdin命令，造成TLV已寫入但Thread介面未啟動的問題；改為逐條執行、等待成功加入並驗證角色，失敗時保留明確狀態供排查。",
+		"hub-v0.9.8": "修正OTBR已成功加入既有Thread Mesh，但REST未回傳網路名稱導致Hub誤顯示待設定；改由安全狀態檔補充網路名稱與角色，不保存或顯示任何Thread金鑰。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

@@ -1,0 +1,9 @@
+[Unit]
+Description=ReefTank Hub flash and verify ESP32-C6 OpenThread RCP
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/reeftank-hub/current/deploy/thread/flash-c6.sh --confirm
+TimeoutStartSec=20min

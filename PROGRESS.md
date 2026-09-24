@@ -16,7 +16,7 @@
 ## 實機基線
 
 - Raspberry Pi：`192.168.0.149`
-- 已確認實機可由 Hub 網頁 OTA；目前發布基線為 `hub-v0.8.0`。
+- 已確認實機可由 Hub 網頁 OTA；目前實機基線為 `hub-v0.9.1`。
 - Channel：stable
 - Auto Update：off
 - `/healthz`：正常
@@ -37,7 +37,8 @@
 - [x] 滴定計算工具自滴定頁獨立成模組，加入PO4、NO3及AF KH配方依據；計算結果不會操作滴定機。
 - [x] CYD改為只讀Hub `/api/panel/status`，保留ESPHome加密API與OTA，不再依賴Google試算表水質資料。
 - [x] 建立ESP32-C6 OpenThread RCP韌體、OTBR部署資產、狀態API及獨立Thread／Matter管理頁。
-- [ ] Thread實機閘門：待C6接上樹莓派後確認USB識別、首次刷寫、OTBR組網、HA Matter配對及回滾，才開放網頁刷寫／重啟按鈕。
+- [x] Thread維護軟體閘門：唯一C6 USB識別、整顆Flash備份、固定韌體雜湊、刷寫讀回驗證、回滾、OTBR安裝／修復／重啟與受限Hub控制。
+- [ ] Thread實機驗收：C6首次刷寫、OTBR組網及HA Matter配對（`hub-v0.9.2` 發布後執行）。
 
 - [x] Phase 0：K7 相容、設定與資料遷移、舊 OTA 過渡與回滾基線。
 - [x] Phase 1：共用 Hub 外殼、響應式頁面與六個固定路由。
@@ -93,3 +94,5 @@
 - [x] Google水質鏡射已退役；Hub SQLite為正式資料來源。
 - [x] 獨立小魚未來水溫查詢與歷史（實機需設定 `XIAOYU_URL`）。
 - [x] 滴定領域模型、模擬器與完整介面（BLE實機傳輸仍屬Phase 10）。
+- [x] 建立ESP32-C6 RCP `rcp-v0.1.2`，Release資產SHA-256固定並由刷寫器強制驗證。
+- [x] 建立Thread維護systemd／polkit閘門及Hub一鍵刷寫、回滾、OTBR安裝與重啟介面。

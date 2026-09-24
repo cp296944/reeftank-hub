@@ -22,7 +22,7 @@ else
     echo "Unplug other USB serial adapters or set RCP_DEVICE manually." >&2
     exit 3
   fi
-  rcp_device="${radios[0]}"
+  rcp_device="$(readlink -f "${radios[0]}")"
 fi
 infra_if="${INFRA_IF:-$(ip route show default | awk 'NR==1 {print $5}')}"
 if [[ -z "${infra_if}" || ! -e "${rcp_device}" ]]; then
@@ -30,10 +30,20 @@ if [[ -z "${infra_if}" || ! -e "${rcp_device}" ]]; then
   exit 4
 fi
 if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is not installed. Install Docker first, then rerun this command." >&2
+  apt-get update
+  if ! apt-get install -y docker.io docker-compose-v2; then
+    apt-get install -y docker.io docker-compose
+  fi
+  systemctl enable --now docker.service
+fi
+if docker compose version >/dev/null 2>&1; then
+  compose=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  compose=(docker-compose)
+else
+  echo "Docker Compose is unavailable after installation." >&2
   exit 5
 fi
-docker compose version >/dev/null
 
 install -d -m 0750 "${root}/data"
 install -m 0644 "${script_dir}/compose.yaml" "${root}/compose.yaml"
@@ -41,6 +51,6 @@ umask 077
 printf 'RCP_DEVICE=%s\nINFRA_IF=%s\n' "${rcp_device}" "${infra_if}" > "${root}/.env"
 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 printf 'net.ipv6.conf.all.forwarding=1\n' > /etc/sysctl.d/90-reeftank-thread.conf
-docker compose --project-directory "${root}" -f "${root}/compose.yaml" pull
-docker compose --project-directory "${root}" -f "${root}/compose.yaml" up -d
+"${compose[@]}" --project-directory "${root}" -f "${root}/compose.yaml" pull
+"${compose[@]}" --project-directory "${root}" -f "${root}/compose.yaml" up -d
 echo "OTBR installed: RCP=${rcp_device}, Ethernet=${infra_if}"

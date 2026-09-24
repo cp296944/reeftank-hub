@@ -25,3 +25,11 @@ ReefTank Hub 使用 ESP32-C6 作為 USB OpenThread RCP。C6 不執行 Wi-Fi、Ma
 - Docker：`sudo docker compose --project-directory /opt/reeftank-hub/thread ps`
 
 若 C6 拔除，Hub只顯示離線；K7、能源、水質及HA原有功能不受影響。
+
+## Hub 管理與回滾
+
+首次只需執行一次 `sudo deploy/thread/install-management.sh`，之後可由
+`/thread/` 啟動固定白名單內的刷寫、OTBR安裝／修復、重新啟動與C6回滾工作。
+刷寫流程要求唯一的Espressif USB JTAG裝置，下載固定版本並驗證SHA-256，先完整
+備份原Flash，再寫入合併映像並執行讀回驗證。備份保存在
+`/opt/reeftank-hub/thread/backups`，不隨Hub OTA刪除。

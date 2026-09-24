@@ -1,0 +1,9 @@
+[Unit]
+Description=ReefTank Hub restart OpenThread Border Router
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/reeftank-hub/current/deploy/thread/restart.sh
+TimeoutStartSec=5min

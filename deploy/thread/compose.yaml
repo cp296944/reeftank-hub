@@ -8,12 +8,14 @@ services:
       - NET_ADMIN
       - NET_RAW
     devices:
-      - ${RCP_DEVICE}:${RCP_DEVICE}
-      - /dev/net/tun:/dev/net/tun
+      - source: ${RCP_DEVICE}
+        target: /dev/ttyACM0
+      - source: /dev/net/tun
+        target: /dev/net/tun
     volumes:
       - /opt/reeftank-hub/thread/data:/data
     environment:
-      OT_RCP_DEVICE: spinel+hdlc+uart://${RCP_DEVICE}?uart-baudrate=460800
+      OT_RCP_DEVICE: spinel+hdlc+uart:///dev/ttyACM0?uart-baudrate=460800
       OT_INFRA_IF: ${INFRA_IF}
       OT_THREAD_IF: wpan0
       OT_LOG_LEVEL: "5"

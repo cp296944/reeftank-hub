@@ -46,6 +46,7 @@ func New() *Monitor {
 
 func (m *Monitor) Snapshot() Status {
 	s := Status{Jobs: map[string]string{}}
+	restURL := m.RESTURL
 	if _, err := os.Stat("/etc/systemd/system/reeftank-thread-flash.service"); err == nil {
 		s.MaintenanceReady = true
 	}
@@ -77,10 +78,18 @@ func (m *Monitor) Snapshot() Status {
 	b, err := os.ReadFile(m.EnvPath)
 	if err == nil {
 		s.Configured = true
+		restAddress, restPort := "", "8081"
 		for _, line := range strings.Split(string(b), "\n") {
 			if strings.HasPrefix(line, "RCP_DEVICE=") {
 				s.RCPDevice = strings.TrimSpace(strings.TrimPrefix(line, "RCP_DEVICE="))
+			} else if strings.HasPrefix(line, "REST_LISTEN_ADDR=") {
+				restAddress = strings.TrimSpace(strings.TrimPrefix(line, "REST_LISTEN_ADDR="))
+			} else if strings.HasPrefix(line, "REST_LISTEN_PORT=") {
+				restPort = strings.TrimSpace(strings.TrimPrefix(line, "REST_LISTEN_PORT="))
 			}
+		}
+		if restAddress != "" {
+			restURL = "http://" + net.JoinHostPort(restAddress, restPort) + "/api/node"
 		}
 	}
 	if s.RCPDevice == "" {
@@ -92,7 +101,7 @@ func (m *Monitor) Snapshot() Status {
 		_, err = os.Stat(s.RCPDevice)
 		s.RCPPresent = err == nil
 	}
-	req, err := http.NewRequest(http.MethodGet, m.RESTURL, nil)
+	req, err := http.NewRequest(http.MethodGet, restURL, nil)
 	if err != nil {
 		s.Error = err.Error()
 		return s

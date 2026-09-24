@@ -692,6 +692,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.8": "修正OTBR已成功加入既有Thread Mesh，但REST未回傳網路名稱導致Hub誤顯示待設定；改由安全狀態檔補充網路名稱與角色，不保存或顯示任何Thread金鑰。",
 		"hub-v0.9.9": "開放樹莓派OTBR的8081 REST API至區域網路，讓獨立Home Assistant主機能新增並監控此Border Router；Thread Dataset與既有Apple網路保持不變。",
 		"hub-v0.9.10": "延長OTBR重建後等待重新加入Thread Mesh的時間，待角色成為router、leader或child才更新Hub狀態，避免樹莓派較慢啟動時仍顯示尚未加入。",
+		"hub-v0.9.11": "Hub改由OTBR環境檔讀取實際REST監聽位址，使本機狀態檢查與HA區網連線共用安全端點；修正8081綁定有線IP後Hub誤判服務離線。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

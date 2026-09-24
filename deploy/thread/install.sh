@@ -49,7 +49,7 @@ fi
 install -d -m 0750 "${root}/data"
 install -m 0644 "${script_dir}/compose.yaml" "${root}/compose.yaml"
 umask 077
-printf 'RCP_DEVICE=%s\nINFRA_IF=%s\nREST_LISTEN_ADDR=%s\n' "${rcp_device}" "${infra_if}" "${rest_listen_addr}" > "${root}/.env"
+printf 'RCP_DEVICE=%s\nINFRA_IF=%s\nREST_LISTEN_ADDR=%s\nREST_LISTEN_PORT=8081\n' "${rcp_device}" "${infra_if}" "${rest_listen_addr}" > "${root}/.env"
 if getent group reefhub >/dev/null 2>&1; then
   chown root:reefhub "${root}/.env"
   chmod 0640 "${root}/.env"

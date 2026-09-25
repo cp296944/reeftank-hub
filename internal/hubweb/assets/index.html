@@ -3,66 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#071821">
+  <meta name="theme-color" content="#071217">
+  <meta name="description" content="ReefTank Hub 海水缸設備、水質與能源控制中心">
   <title>ReefTank Hub</title>
   <link rel="stylesheet" href="/hub-assets/app.css">
+  <link rel="stylesheet" href="/hub-assets/console.css">
 </head>
-<body data-page="home">
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>海水缸控制中心</small></div></div>
-    <div class="top-status"><span class="dot"></span><span id="hub-status">系統啟動中</span><button id="update-check" class="top-button" type="button">檢查更新</button><label class="auto-update"><input id="update-auto" type="checkbox">自動</label><span id="update-status"></span><button id="version" class="version version-button" type="button">—</button></div>
+<body data-page="home" class="hub-home">
+  <header class="topbar home-topbar">
+    <a class="brand brand-link" href="/" aria-label="ReefTank Hub 首頁"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>海水缸控制中心</small></div></a>
+    <div class="top-status"><span class="status-signal" aria-hidden="true"></span><span id="hub-status">系統啟動中</span><button id="update-check" class="top-button" type="button">檢查更新</button><label class="auto-update"><input id="update-auto" type="checkbox">自動</label><span id="update-status"></span><button id="version" class="version version-button" type="button" aria-label="查看版本紀錄">--</button></div>
   </header>
-  <main>
-    <section class="console-head"><div><p class="eyebrow">REEFTANK CONTROL CENTER</p><h1>海水缸總覽</h1></div><div class="console-clock" id="console-clock">--</div></section>
-    <section class="section-head compact"><div><p class="eyebrow">WATER PARAMETERS</p><h2>最新水質</h2></div><a href="/water/">紀錄與歷史 →</a></section>
-    <section id="water-dashboard" class="water-dashboard"><article class="parameter-card"><span>載入中</span></article></section>
-
-    <section class="section-head"><div><p class="eyebrow">ENERGY MANAGER</p><h2>能源總管</h2></div><a href="/power/">完整電源監控 →</a></section>
-    <section class="energy-manager">
-      <div class="metric-grid energy-summary" aria-label="能源摘要">
-        <article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article>
-        <article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article>
-        <article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article>
-        <article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article>
+  <main class="home-shell">
+    <section class="home-hero" aria-labelledby="overview-title">
+      <div class="hero-copy"><p class="eyebrow">REEF OPERATIONS</p><h1 id="overview-title">你的海水缸，<br><span>一眼掌握。</span></h1><p>水質、能源與設備狀態集中在同一個本機控制中心。</p><div class="hero-links"><a class="primary-action" href="/water/">查看水質</a><a class="text-action" href="/system/">系統狀態 <span aria-hidden="true">→</span></a></div></div>
+      <aside class="hero-instrument" aria-label="目前水溫"><div class="instrument-head"><span>WATER TEMP</span><span class="instrument-state">LIVE</span></div><strong><span id="home-temperature">--</span><small>°C</small></strong><p id="home-temperature-note">正在取得獨立水溫資料</p><div class="instrument-scale" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></aside>
+    </section>
+    <section class="home-section water-section" aria-labelledby="water-title">
+      <div class="section-head compact"><div><p class="eyebrow">WATER PARAMETERS</p><h2 id="water-title">最新水質</h2></div><a href="/water/">紀錄與歷史 <span aria-hidden="true">→</span></a></div>
+      <div id="water-dashboard" class="water-dashboard" aria-live="polite"><article class="parameter-card loading-card"><span>正在載入水質資料</span><strong>--</strong></article></div>
+    </section>
+    <section class="home-section energy-section" aria-labelledby="energy-title">
+      <div class="section-head"><div><p class="eyebrow">ENERGY MANAGER</p><h2 id="energy-title">能源總管</h2></div><a href="/power/">完整電源監控 <span aria-hidden="true">→</span></a></div>
+      <div class="energy-manager"><div class="metric-grid energy-summary" aria-label="能源摘要"><article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article><article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article><article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article><article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article></div><div id="life-support" class="metric-grid energy-devices" aria-live="polite"><article class="metric"><span>生命維持設備</span><strong>讀取中</strong><small>等待 HA 即時快取</small></article></div></div>
+    </section>
+    <section class="home-section modules-section" aria-labelledby="modules-title">
+      <div class="section-head"><div><p class="eyebrow">MODULES</p><h2 id="modules-title">設備與資料</h2></div></div>
+      <div class="module-grid home-module-grid">
+        <a class="module ready module-feature" href="/K7/"><div class="module-symbol">K7</div><div><h3>K7 燈具</h3><p>三燈連動、排程與手動控制</p></div><span>可使用</span></a>
+        <a class="module ready" href="/water/"><div class="module-symbol">H₂O</div><div><h3>水質與水溫</h3><p>七項水質、溫度、換水與歷史</p></div><span id="module-water">本機資料</span></a>
+        <a class="module ready" href="/power/"><div class="module-symbol">W</div><div><h3>電源監控</h3><p>18 路插座、即時與歷史用電</p></div><span id="module-power">連線中</span></a>
+        <a class="module ready" href="/dosing/"><div class="module-symbol">4×</div><div><h3>魔點滴定</h3><p>四泵頭、排程、校正與液量</p></div><span id="module-dosing">模擬模式</span></a>
+        <a class="module ready" href="/calculator/"><div class="module-symbol">∑</div><div><h3>滴定計算</h3><p>水量、濃度、安全上限與劑量換算</p></div><span>僅計算</span></a>
+        <a class="module" href="/thread/"><div class="module-symbol">TH</div><div><h3>Thread / Matter</h3><p>ESP32-C6 RCP、OTBR 與 HA Matter</p></div><span id="module-thread">準備中</span></a>
+        <a class="module ready module-system" href="/system/"><div class="module-symbol">SYS</div><div><h3>系統監控與設定</h3><p>CPU、記憶體、儲存、資料來源、備份與 OTA</p></div><span>系統管理</span></a>
       </div>
-      <div id="life-support" class="metric-grid energy-devices"><article class="metric"><span>設備狀態</span><strong>讀取中</strong><small>等待 HA 即時快取</small></article></div>
     </section>
-
-    <section class="section-head"><div><p class="eyebrow">MODULES</p><h2>設備與資料</h2></div></section>
-    <section class="module-grid">
-      <a class="module ready" href="/K7/"><div class="icon">☀</div><div><h3>K7 燈具</h3><p>三燈連動 · 排程與手動控制</p></div><span>可使用</span></a>
-      <a class="module ready" href="/dosing/"><div class="icon">◫</div><div><h3>魔點滴定</h3><p>四泵頭 · 排程 · 校正 · 液量</p></div><span id="module-dosing">模擬模式</span></a>
-      <a class="module ready" href="/calculator/"><div class="icon">∑</div><div><h3>滴定計算</h3><p>水量 · 濃度 · 安全上限 · 劑量換算</p></div><span>僅計算</span></a>
-      <a class="module ready" href="/power/"><div class="icon">ϟ</div><div><h3>電源監控</h3><p>18 路插座 · 即時與歷史用電</p></div><span id="module-power">連線中</span></a>
-      <a class="module ready" href="/water/"><div class="icon">◉</div><div><h3>水質與水溫</h3><p>七項水質 · 溫度 · 換水 · 歷史</p></div><span id="module-water">本機資料</span></a>
-      <a class="module ready" href="/system/"><div class="icon">⚙</div><div><h3>系統設定</h3><p>資料來源 · 取樣頻率 · 備份 · OTA</p></div><span>系統管理</span></a>
-      <a class="module" href="/thread/"><div class="icon">⬡</div><div><h3>Thread / Matter</h3><p>ESP32-C6 RCP · 樹莓派 OTBR · HA Matter</p></div><span id="module-thread">準備中</span></a>
-    </section>
-
-    <section id="bootstrap-card" class="notice hidden">
-      <div><strong>需要完成一次系統 Bootstrap</strong><p>安裝 BLE 與安全維護助手後，所有 Hub 元件即可從網頁 OTA。</p></div>
-      <code id="bootstrap-command"></code>
-    </section>
+    <section id="bootstrap-card" class="notice hidden"><div><strong>需要完成一次系統 Bootstrap</strong><p>安裝 BLE 與安全維護助手後，所有 Hub 元件即可從網頁 OTA。</p></div><code id="bootstrap-command"></code></section>
   </main>
-  <footer>ReefTank Hub · Raspberry Pi</footer>
-  <div id="update-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="update-title">
-    <section class="update-panel">
-      <div class="update-panel-head"><div><p class="eyebrow">SYSTEM UPDATE</p><h2 id="update-title">系統更新</h2></div><button id="update-close" class="update-close" type="button" aria-label="關閉">×</button></div>
-      <div class="update-target"><span>更新版本</span><strong id="update-target">—</strong><time id="update-elapsed">00:00</time></div>
-      <div class="update-progress"><i id="update-progress-bar"></i></div>
-      <ol id="update-steps" class="update-steps">
-        <li data-stage="prepare">確認更新套件</li><li data-stage="download">下載與驗證</li><li data-stage="install">備份並安裝</li><li data-stage="restart">重新啟動服務</li><li data-stage="health">版本與健康檢查</li>
-      </ol>
-      <p id="update-message" class="update-message">等待開始</p>
-      <div class="update-actions"><button id="update-retry" class="top-button hidden" type="button">重新檢查</button><button id="update-done" class="top-button hidden" type="button">完成並重新載入</button></div>
-    </section>
-  </div>
-  <div id="history-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="history-title">
-    <section class="update-panel history-panel">
-      <div class="update-panel-head"><div><p class="eyebrow">RELEASE HISTORY</p><h2 id="history-title">版本更新紀錄</h2></div><button id="history-close" class="update-close" type="button" aria-label="關閉">×</button></div>
-      <div id="history-list" class="history-list"><p class="muted">讀取中…</p></div>
-    </section>
-  </div>
+  <footer>ReefTank Hub <span>Raspberry Pi 本機運行</span></footer>
+  <div id="update-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="update-title"><section class="update-panel"><div class="update-panel-head"><div><p class="eyebrow">SYSTEM UPDATE</p><h2 id="update-title">系統更新</h2></div><button id="update-close" class="update-close" type="button" aria-label="關閉">×</button></div><div class="update-target"><span>更新版本</span><strong id="update-target">--</strong><time id="update-elapsed">00:00</time></div><div class="update-progress"><i id="update-progress-bar"></i></div><ol id="update-steps" class="update-steps"><li data-stage="prepare">確認更新套件</li><li data-stage="download">下載與驗證</li><li data-stage="install">備份並安裝</li><li data-stage="restart">重新啟動服務</li><li data-stage="health">版本與健康檢查</li></ol><p id="update-message" class="update-message">等待開始</p><div class="update-actions"><button id="update-retry" class="top-button hidden" type="button">重新檢查</button><button id="update-done" class="top-button hidden" type="button">完成並重新載入</button></div></section></div>
+  <div id="history-dialog" class="update-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="history-title"><section class="update-panel history-panel"><div class="update-panel-head"><div><p class="eyebrow">RELEASE HISTORY</p><h2 id="history-title">版本更新紀錄</h2></div><button id="history-close" class="update-close" type="button" aria-label="關閉">×</button></div><div id="history-list" class="history-list"><p class="muted">讀取中...</p></div></section></div>
   <script src="/hub-assets/app.js" defer></script>
 </body>
 </html>

@@ -105,7 +105,8 @@ func TestBackfillEquipmentEventsCountsShortSingleSampleRun(t *testing.T) {
 	}
 	defer db.Close()
 	ctx := context.Background()
-	base := time.Date(2026, 9, 24, 1, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	base := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, time.UTC)
 	for i, watts := range []float64{0.05, 3.3, 0.04, 0.03} {
 		if err := db.RecordOutletSample(ctx, "outlet_09", base.Add(time.Duration(i)*2*time.Second), 117, watts/117, watts); err != nil {
 			t.Fatal(err)

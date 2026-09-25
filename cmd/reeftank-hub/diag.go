@@ -47,6 +47,8 @@ func (d *diagAPI) snapshot() map[string]any {
 	memTotal, memAvail := meminfoKB()
 	l1, l5, l15 := loadAvg()
 	diskTotal, diskFree := diskKB("/")
+	hostname, model, prettyOS, kernel, arch := systemIdentity()
+	throttled := throttleFlags()
 
 	return map[string]any{
 		"ts":               time.Now().Format(time.RFC3339),
@@ -67,13 +69,25 @@ func (d *diagAPI) snapshot() map[string]any {
 		"writes_today":     map[string]any{"auto": auto, "manual": manual, "date": day},
 
 		// Pi / OS resources
-		"cpu_count":     runtime.NumCPU(),
-		"load":          []float64{l1, l5, l15},
-		"mem_total_kb":  memTotal,
-		"mem_avail_kb":  memAvail,
-		"disk_total_kb": diskTotal,
-		"disk_free_kb":  diskFree,
-		"soc_temp_c":    socTempC(),
+		"cpu_count":             runtime.NumCPU(),
+		"load":                  []float64{l1, l5, l15},
+		"mem_total_kb":          memTotal,
+		"mem_avail_kb":          memAvail,
+		"disk_total_kb":         diskTotal,
+		"disk_free_kb":          diskFree,
+		"soc_temp_c":            socTempC(),
+		"cpu_percent":           cpuUsagePercent(),
+		"system_uptime_s":       systemUptimeSeconds(),
+		"hostname":              hostname,
+		"model":                 model,
+		"os":                    prettyOS,
+		"kernel":                kernel,
+		"arch":                  arch,
+		"throttle_flags":        throttled,
+		"undervoltage_now":      throttled&0x1 != 0,
+		"throttled_now":         throttled&0x4 != 0,
+		"undervoltage_occurred": throttled&0x10000 != 0,
+		"throttled_occurred":    throttled&0x40000 != 0,
 	}
 }
 

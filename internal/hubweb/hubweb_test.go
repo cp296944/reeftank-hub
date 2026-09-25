@@ -21,6 +21,7 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 		k7Path     string
 	}{
 		{"/", 200, "ReefTank Hub", ""},
+		{"/hub-assets/console.css", 200, "system-monitor", ""},
 		{"/api/hub/status", 200, `"version":"hub-vtest"`, ""},
 		{"/api/bootstrap/status", 200, `"required":true`, ""},
 		{"/K7/", 200, "k7", "/static/"},

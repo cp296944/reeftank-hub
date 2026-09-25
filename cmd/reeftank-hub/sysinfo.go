@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -58,4 +59,37 @@ func socTempC() float64 {
 		}
 	}
 	return 0
+}
+
+func systemIdentity() (hostname, model, prettyOS, kernel, arch string) {
+	hostname, _ = os.Hostname()
+	arch = runtime.GOARCH
+	if b, err := os.ReadFile("/proc/device-tree/model"); err == nil {
+		model = strings.TrimSpace(strings.TrimRight(string(b), "\x00"))
+	}
+	if b, err := os.ReadFile("/etc/os-release"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(line, "PRETTY_NAME=") {
+				prettyOS = strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), `"`)
+				break
+			}
+		}
+	}
+	if b, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
+		kernel = strings.TrimSpace(string(b))
+	}
+	return
+}
+
+func systemUptimeSeconds() int {
+	b, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0
+	}
+	fields := strings.Fields(string(b))
+	if len(fields) == 0 {
+		return 0
+	}
+	value, _ := strconv.ParseFloat(fields[0], 64)
+	return int(value)
 }

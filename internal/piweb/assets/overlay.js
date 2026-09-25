@@ -714,8 +714,10 @@
     var anchor = document.getElementById('autoPanel') || document.querySelector('.chart-canvas-wrap');
     if (!anchor || !liveChart()) return;
 
-    // Always open — the user wants the chart and the value table side by side
-    // for tuning, no collapse.
+    // Keep the editor in normal document flow after the chart panel. Appending
+    // it inside #autoPanel makes Chart.js's absolutely-positioned canvas and
+    // the table compete for the same flex height, which overlaps at different
+    // viewport sizes and browser zoom levels.
     var box = el('div', { id: 'k7pi-grid' });
     box.style.cssText = 'margin-top:10px;border:1px solid var(--border,#2c343d);border-radius:8px;background:var(--surface,#1c2229);overflow:hidden';
     var head = el('div');
@@ -725,7 +727,7 @@
     buildGrid(body);
     setInterval(function () { body._sync && body._sync(); }, 400);
     box.appendChild(head); box.appendChild(body);
-    anchor.appendChild(box);
+    anchor.parentNode.insertBefore(box, anchor.nextSibling);
   }
 
   function buildGrid(body) {

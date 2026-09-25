@@ -71,7 +71,7 @@ body {
   flex: 1; min-height: 0;
 }
 .col-left  { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
-.col-mid   { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.col-mid   { display: flex; flex-direction: column; gap:10px; min-height: 0; min-width: 0; overflow-y:auto; scrollbar-gutter:stable; }
 .col-right { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
 
 /* ── cards ── */
@@ -149,7 +149,7 @@ body {
 
 /* ── chart (fills col-mid) ── */
 #autoPanel {
-  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  flex: 0 0 clamp(320px, 48vh, 560px); min-height: 320px; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
   padding: 8px 12px 6px;
 }
@@ -274,8 +274,13 @@ button:disabled { opacity:0.45; cursor:not-allowed; }
 @media (max-width:1100px) {
   body { overflow:auto; height:auto; }
   .grid-b { grid-template-columns:1fr; height:auto; }
-  .col-left, .col-right { overflow-y:visible; }
-  #autoPanel { min-height:320px; }
+  .col-left, .col-mid, .col-right { overflow-y:visible; }
+  #autoPanel { flex-basis:clamp(340px, 58vh, 520px); min-height:340px; }
+}
+@media (max-width:640px) {
+  #autoPanel { flex-basis:420px; min-height:420px; padding:8px; }
+  .chart-top { align-items:flex-start; flex-direction:column; }
+  .chart-controls { width:100%; justify-content:flex-start; }
 }
 @media (min-width:1101px) and (max-height:760px) {
   .topbar { padding-top:4px; padding-bottom:4px; }

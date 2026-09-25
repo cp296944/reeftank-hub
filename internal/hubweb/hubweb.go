@@ -115,6 +115,10 @@ func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {
 // endpoints. Rewriting only the initial document lets /K7/ become its stable
 // human-facing entry point without forking that upstream UI.
 func (h *handler) serveK7(w http.ResponseWriter, r *http.Request) {
+	// K7 is intentionally kept on its proven standalone UI. Force the browser
+	// to reload that document after a Hub OTA so stale mixed assets cannot make
+	// the legacy controller appear unstyled or partially upgraded.
+	w.Header().Set("Cache-Control", "no-store")
 	r2 := r.Clone(r.Context())
 	r2.URL.Path = "/static/" + strings.TrimPrefix(r.URL.Path, "/K7/")
 	h.K7.ServeHTTP(w, r2)

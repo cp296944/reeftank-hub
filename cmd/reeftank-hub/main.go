@@ -695,6 +695,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.9.11": "Hub改由OTBR環境檔讀取實際REST監聽位址，使本機狀態檢查與HA區網連線共用安全端點；修正8081綁定有線IP後Hub誤判服務離線。",
 		"hub-v0.9.12": "調整Thread狀態目錄為僅可穿越且不可列出的權限，讓Hub服務帳號讀取公開角色與網路名稱；TLV備份仍維持root-only，避免洩漏網路憑證。",
 		"hub-v0.10.0": "重新設計 Hub 首頁為專業水族儀控介面，改善手機導覽與資訊層級；系統頁新增 CPU、記憶體、溫度、儲存、負載、運行時間及樹莓派低電壓降頻即時監控。",
+		"hub-v0.10.1": "修正首頁水溫被 Home Assistant 電源請求阻塞而持續顯示載入中的問題；K7 維持上一版獨立控制介面，並停用頁面快取避免 OTA 後混用舊資源造成排版異常。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

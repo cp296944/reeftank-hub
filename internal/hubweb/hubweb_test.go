@@ -57,3 +57,14 @@ func TestK7Redirect(t *testing.T) {
 		t.Fatalf("redirect = %d %q", rr.Code, rr.Header().Get("Location"))
 	}
 }
+
+func TestK7PageDisablesCache(t *testing.T) {
+	h := New(Options{K7: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("k7"))
+	})})
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/K7/", nil))
+	if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}

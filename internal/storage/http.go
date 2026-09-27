@@ -18,7 +18,30 @@ func (d *DB) Register(mux *http.ServeMux) {
 			return
 		}
 		temps, _ := d.TemperatureCount(r.Context())
-		writeJSON(w, http.StatusOK, map[string]any{"database": filepath.Base(d.path), "samples": count, "temperature_samples": temps, "retention_days": 0})
+		writeJSON(w, http.StatusOK, map[string]any{"database": filepath.Base(d.path), "samples": count, "temperature_samples": temps, "retention_days": d.RetentionDays(r.Context())})
+	})
+	mux.HandleFunc("GET /api/hub/storage/retention", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"retention_days": d.RetentionDays(r.Context()), "options": []int{30, 90, 180, 365, 0}})
+	})
+	mux.HandleFunc("PUT /api/hub/storage/retention", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			RetentionDays int  `json:"retention_days"`
+			Confirm       bool `json:"confirm"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&in) != nil || !ValidRetentionDays(in.RetentionDays) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "retention_days must be one of 0, 30, 90, 180, 365"})
+			return
+		}
+		if in.RetentionDays != 0 && !in.Confirm {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "confirm=true is required for deletion policy"})
+			return
+		}
+		removed, err := d.SetRetentionDays(r.Context(), in.RetentionDays)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"retention_days": in.RetentionDays, "removed": removed})
 	})
 	mux.HandleFunc("POST /api/hub/storage/backup", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {

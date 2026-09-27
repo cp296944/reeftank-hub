@@ -130,7 +130,11 @@ func run(args []string) error {
 	go func() {
 		backfillCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
 		defer cancel()
-		if err := haSync.Backfill(backfillCtx, 3650); err != nil && !errors.Is(err, context.Canceled) {
+		backfillDays := hubDB.RetentionDays(backfillCtx)
+		if backfillDays == 0 {
+			backfillDays = 3650
+		}
+		if err := haSync.Backfill(backfillCtx, backfillDays); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Warn("HA history backfill failed", "err", err)
 		}
 	}()
@@ -141,6 +145,12 @@ func run(args []string) error {
 		}
 	}
 	backupDB()
+	cleanupRetention := func() {
+		if _, err := hubDB.CleanupRetention(context.Background()); err != nil {
+			slog.Warn("history retention cleanup failed", "err", err)
+		}
+	}
+	cleanupRetention()
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -150,6 +160,7 @@ func run(args []string) error {
 				return
 			case <-ticker.C:
 				backupDB()
+				cleanupRetention()
 			}
 		}
 	}()
@@ -697,6 +708,7 @@ func conciseReleaseNotes(tag, fallback string) string {
 		"hub-v0.10.0": "重新設計 Hub 首頁為專業水族儀控介面，改善手機導覽與資訊層級；系統頁新增 CPU、記憶體、溫度、儲存、負載、運行時間及樹莓派低電壓降頻即時監控。",
 		"hub-v0.10.1": "修正首頁水溫被 Home Assistant 電源請求阻塞而持續顯示載入中的問題；K7 維持上一版獨立控制介面，並停用頁面快取避免 OTA 後混用舊資源造成排版異常。",
 		"hub-v0.10.2": "修正K7排程圖與光譜數值表在不同解析度、瀏覽器縮放下互相重疊；改用正常文件流、自適應圖表高度及分層捲動，兼容手機、平板、筆電與桌面顯示。",
+		"hub-v0.11.0": "系統頁新增歷史資料保留政策，可選1、3、6、12個月或永久；設定會保存於本機資料庫並每日清理自動採集資料，手動水質與換水紀錄不受影響。",
 	}
 	if note := notes[tag]; note != "" {
 		return note

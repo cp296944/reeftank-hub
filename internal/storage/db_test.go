@@ -36,6 +36,29 @@ func TestMigrateRecordAndBackup(t *testing.T) {
 	}
 }
 
+func TestRetentionPolicy(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	old := time.Now().AddDate(0, 0, -100).UTC().Format(time.RFC3339Nano)
+	if _, err := db.db.ExecContext(ctx, `INSERT INTO entity_samples(entity_id,state,value,unit,source_time,received_time,source) VALUES('sensor.old','1',1,'W',?,?,'test')`, old, old); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := db.SetRetentionDays(ctx, 90)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed.EntitySamples != 1 || db.RetentionDays(ctx) != 90 {
+		t.Fatalf("removed=%+v retention=%d", removed, db.RetentionDays(ctx))
+	}
+	if _, err := db.SetRetentionDays(ctx, 31); err == nil {
+		t.Fatal("invalid retention accepted")
+	}
+}
+
 func TestCorruptDatabaseIsPreservedAndRebuilt(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hub.db")

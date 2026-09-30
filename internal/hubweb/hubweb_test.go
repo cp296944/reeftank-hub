@@ -22,6 +22,8 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 	}{
 		{"/", 200, "ReefTank Hub", ""},
 		{"/hub-assets/console.css", 200, "system-monitor", ""},
+		{"/hub-assets/app.js", 200, "formatWaterValue(key,point.value)", ""},
+		{"/hub-assets/app.js", 200, "40 g KH粉配上500 mL水", ""},
 		{"/api/hub/status", 200, `"version":"hub-vtest"`, ""},
 		{"/api/bootstrap/status", 200, `"required":true`, ""},
 		{"/K7/", 200, "k7", "/static/"},

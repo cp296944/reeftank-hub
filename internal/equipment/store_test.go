@@ -108,6 +108,72 @@ func TestEquipmentHTTP(t *testing.T) {
 	}
 }
 
+func TestUpdateSettingsPersistsAtomically(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "equipment.json")
+	s, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := s.Snapshot()
+	devices := make([]DeviceSettings, len(before.Devices))
+	for i, d := range before.Devices {
+		devices[i] = DeviceSettings{ID: d.ID, DisplayName: d.DisplayName, SwitchEntity: d.SwitchEntity, HighFrequency: d.HighFrequency}
+	}
+	strips := make([]PowerStripSettings, len(before.PowerStrips))
+	for i, strip := range before.PowerStrips {
+		strips[i] = PowerStripSettings{ID: strip.ID, PollIntervalSeconds: strip.PollIntervalSeconds}
+	}
+	devices[17].DisplayName = "底缸燈"
+	devices[17].HighFrequency = true
+	devices[0].SwitchEntity, devices[17].SwitchEntity = devices[17].SwitchEntity, devices[0].SwitchEntity
+	strips[2].PollIntervalSeconds = 5
+	after, err := s.UpdateSettings(devices, strips)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Devices[17].DisplayName != "底缸燈" || !after.Devices[17].HighFrequency || after.PowerStrips[2].PollIntervalSeconds != 5 {
+		t.Fatalf("bulk update missing values: %+v %+v", after.Devices[17], after.PowerStrips[2])
+	}
+	reopened, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Snapshot(); got.Devices[17].DisplayName != "底缸燈" || got.Devices[17].SwitchEntity != before.Devices[0].SwitchEntity {
+		t.Fatalf("bulk update did not persist: %+v", got.Devices[17])
+	}
+
+	invalid := append([]DeviceSettings(nil), devices...)
+	invalid[1].SwitchEntity = invalid[0].SwitchEntity
+	if _, err := s.UpdateSettings(invalid, strips); err == nil {
+		t.Fatal("duplicate entity assignment accepted")
+	}
+	if got := s.Snapshot(); got.Devices[1].SwitchEntity != devices[1].SwitchEntity {
+		t.Fatal("failed update partially changed the store")
+	}
+}
+
+func TestBulkEquipmentHTTP(t *testing.T) {
+	s, _ := Open(filepath.Join(t.TempDir(), "equipment.json"))
+	snap := s.Snapshot()
+	devices := make([]DeviceSettings, len(snap.Devices))
+	for i, d := range snap.Devices {
+		devices[i] = DeviceSettings{ID: d.ID, DisplayName: d.DisplayName, SwitchEntity: d.SwitchEntity, HighFrequency: d.HighFrequency}
+	}
+	devices[17].DisplayName = "底缸燈"
+	strips := make([]PowerStripSettings, len(snap.PowerStrips))
+	for i, strip := range snap.PowerStrips {
+		strips[i] = PowerStripSettings{ID: strip.ID, PollIntervalSeconds: strip.PollIntervalSeconds}
+	}
+	body, _ := json.Marshal(map[string]any{"devices": devices, "power_strips": strips})
+	mux := http.NewServeMux()
+	s.Register(mux)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPut, "/api/hub/equipment", strings.NewReader(string(body))))
+	if rr.Code != http.StatusOK || s.Snapshot().Devices[17].DisplayName != "底缸燈" {
+		t.Fatalf("bulk PUT = %d %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestRejectsInvalidEntityAndUnknownFields(t *testing.T) {
 	s, _ := Open(filepath.Join(t.TempDir(), "equipment.json"))
 	if _, err := s.Assign("outlet_01", "light.not_a_switch"); err == nil {

@@ -47,6 +47,18 @@ type Snapshot struct {
 	Devices     []Device     `json:"devices"`
 }
 
+type DeviceSettings struct {
+	ID            string `json:"id"`
+	DisplayName   string `json:"display_name"`
+	SwitchEntity  string `json:"switch_entity"`
+	HighFrequency bool   `json:"high_frequency"`
+}
+
+type PowerStripSettings struct {
+	ID                  string `json:"id"`
+	PollIntervalSeconds int    `json:"poll_interval_seconds"`
+}
+
 type Store struct {
 	mu       sync.RWMutex
 	path     string
@@ -95,6 +107,71 @@ func (s *Store) Snapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return cloneSnapshot(s.data)
+}
+
+// UpdateSettings validates and persists the complete editable equipment map as
+// one transaction. This avoids exposing partially-applied names, entity
+// assignments or polling settings when the user saves the editor.
+func (s *Store) UpdateSettings(devices []DeviceSettings, strips []PowerStripSettings) (Snapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(devices) != len(s.data.Devices) || len(strips) != len(s.data.PowerStrips) {
+		return Snapshot{}, fmt.Errorf("expected %d devices and %d power strips", len(s.data.Devices), len(s.data.PowerStrips))
+	}
+	next := cloneSnapshot(s.data)
+	deviceByID := make(map[string]DeviceSettings, len(devices))
+	for _, in := range devices {
+		in.ID = strings.TrimSpace(in.ID)
+		in.DisplayName = strings.TrimSpace(in.DisplayName)
+		in.SwitchEntity = strings.TrimSpace(in.SwitchEntity)
+		if in.ID == "" || deviceByID[in.ID].ID != "" {
+			return Snapshot{}, fmt.Errorf("duplicate or empty device id %q", in.ID)
+		}
+		if in.DisplayName == "" || len([]rune(in.DisplayName)) > 60 {
+			return Snapshot{}, fmt.Errorf("display_name for %s must contain 1-60 characters", in.ID)
+		}
+		deviceByID[in.ID] = in
+	}
+	for i := range next.Devices {
+		in, ok := deviceByID[next.Devices[i].ID]
+		if !ok {
+			return Snapshot{}, fmt.Errorf("missing equipment %q", next.Devices[i].ID)
+		}
+		next.Devices[i].DisplayName = in.DisplayName
+		next.Devices[i].SwitchEntity = in.SwitchEntity
+		next.Devices[i].HighFrequency = in.HighFrequency
+	}
+	stripByID := make(map[string]PowerStripSettings, len(strips))
+	for _, in := range strips {
+		in.ID = strings.TrimSpace(in.ID)
+		if in.ID == "" || stripByID[in.ID].ID != "" {
+			return Snapshot{}, fmt.Errorf("duplicate or empty power strip id %q", in.ID)
+		}
+		if in.PollIntervalSeconds < 1 || in.PollIntervalSeconds > 3600 {
+			return Snapshot{}, fmt.Errorf("poll_interval_seconds for %s must be between 1 and 3600", in.ID)
+		}
+		stripByID[in.ID] = in
+	}
+	for i := range next.PowerStrips {
+		in, ok := stripByID[next.PowerStrips[i].ID]
+		if !ok {
+			return Snapshot{}, fmt.Errorf("missing power strip %q", next.PowerStrips[i].ID)
+		}
+		next.PowerStrips[i].PollIntervalSeconds = in.PollIntervalSeconds
+	}
+	next.Revision++
+	next.UpdatedAt = s.now().UTC()
+	if err := validate(next); err != nil {
+		return Snapshot{}, err
+	}
+	previous := s.data
+	s.data = next
+	if err := s.saveLocked(); err != nil {
+		s.data = previous
+		return Snapshot{}, err
+	}
+	s.notifyLocked()
+	return cloneSnapshot(s.data), nil
 }
 
 // Assign changes the HA switch bound to one logical device. If the new entity

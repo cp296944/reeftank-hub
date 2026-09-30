@@ -10,6 +10,24 @@ func (s *Store) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hub/equipment", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.Snapshot())
 	})
+	mux.HandleFunc("PUT /api/hub/equipment", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Devices     []DeviceSettings     `json:"devices"`
+			PowerStrips []PowerStripSettings `json:"power_strips"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid equipment settings"})
+			return
+		}
+		snap, err := s.UpdateSettings(in.Devices, in.PowerStrips)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, snap)
+	})
 	mux.HandleFunc("PUT /api/hub/equipment/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			SwitchEntity  *string `json:"switch_entity"`

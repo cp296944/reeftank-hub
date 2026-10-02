@@ -59,19 +59,21 @@ func TestRetentionPolicy(t *testing.T) {
 	}
 }
 
-func TestCorruptDatabaseIsPreservedAndRebuilt(t *testing.T) {
+func TestCorruptDatabaseFailsWithoutReplacingFiles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hub.db")
 	if err := os.WriteFile(path, []byte("not a sqlite database"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
+	if db, err := Open(path); err == nil {
+		db.Close()
+		t.Fatal("corruption must not create an empty database")
 	}
-	_ = db.Close()
+	if b, err := os.ReadFile(path); err != nil || string(b) != "not a sqlite database" {
+		t.Fatalf("original changed: %q %v", b, err)
+	}
 	matches, _ := filepath.Glob(path + ".corrupt-*")
-	if len(matches) != 1 {
+	if len(matches) != 0 {
 		t.Fatalf("preserved corrupt files=%v", matches)
 	}
 }

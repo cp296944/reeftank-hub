@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -59,9 +60,21 @@ func (d *DB) Register(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, map[string]string{"backup": dest})
 	})
 	mux.HandleFunc("GET /api/hub/storage/export", func(w http.ResponseWriter, r *http.Request) {
+		dir, err := os.MkdirTemp(filepath.Dir(d.path), ".export-")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create export snapshot"})
+			return
+		}
+		defer os.RemoveAll(dir)
+		snapshot := filepath.Join(dir, "hub.db")
+		if err := d.Backup(snapshot); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot snapshot database"})
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Disposition", `attachment; filename="reeftank-hub.db"`)
 		w.Header().Set("Content-Type", "application/vnd.sqlite3")
-		http.ServeFile(w, r, d.path)
+		http.ServeFile(w, r, snapshot)
 	})
 	mux.HandleFunc("GET /api/hub/storage/history", func(w http.ResponseWriter, r *http.Request) {
 		hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))

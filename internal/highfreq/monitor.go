@@ -3,6 +3,7 @@ package highfreq
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -26,25 +27,22 @@ type DeviceStatus struct {
 	TodayCount int                           `json:"today_count"`
 	History    []storage.EquipmentDailyCount `json:"history,omitempty"`
 }
-type detector struct {
-	high, low int
-	active    bool
-	eventID   int64
-	started   time.Time
+type outletClient interface {
+	childIDs(context.Context, string) ([]string, error)
+	energy(context.Context, string, string) (outletReading, error)
 }
 type Monitor struct {
 	equipment *equipment.Store
 	db        *storage.DB
 	loc       *time.Location
-	client    hs300Client
+	client    outletClient
 	mu        sync.RWMutex
 	statuses  map[string]DeviceStatus
-	detectors map[string]*detector
 	childIDs  map[string][]string
 }
 
 func New(eq *equipment.Store, db *storage.DB, loc *time.Location) *Monitor {
-	return &Monitor{equipment: eq, db: db, loc: loc, client: hs300Client{timeout: 3 * time.Second}, statuses: map[string]DeviceStatus{}, detectors: map[string]*detector{}, childIDs: map[string][]string{}}
+	return &Monitor{equipment: eq, db: db, loc: loc, client: hs300Client{timeout: 3 * time.Second}, statuses: map[string]DeviceStatus{}, childIDs: map[string][]string{}}
 }
 
 func (m *Monitor) Run(ctx context.Context) {
@@ -92,7 +90,15 @@ func (m *Monitor) runStrip(ctx context.Context, stripID string) {
 		}
 		enabled := []equipment.Device{}
 		for _, d := range snap.Devices {
-			if d.HighFrequency && d.Slot >= strip.SlotStart && d.Slot <= strip.SlotEnd {
+			if !d.HighFrequency {
+				continue
+			}
+			physical, _, err := equipment.PhysicalOutlet(snap, d)
+			if err != nil {
+				m.setError(d, err.Error())
+				continue
+			}
+			if physical.ID == strip.ID {
 				enabled = append(enabled, d)
 			}
 		}
@@ -148,7 +154,11 @@ func (m *Monitor) pollStrip(ctx context.Context, strip equipment.PowerStrip, dev
 	for _, d := range devices {
 		d := d
 		go func() {
-			idx := d.Slot - strip.SlotStart
+			physical, idx, e := equipment.PhysicalOutlet(m.equipment.Snapshot(), d)
+			if e != nil || physical.ID != strip.ID || idx < 0 || idx >= len(ids) {
+				ch <- result{d: d, e: fmt.Errorf("cannot resolve physical outlet for %s", d.SwitchEntity)}
+				return
+			}
 			r, e := m.client.energy(ctx, strip.Host, ids[idx])
 			ch <- result{d, r, e}
 		}()
@@ -156,6 +166,18 @@ func (m *Monitor) pollStrip(ctx context.Context, strip equipment.PowerStrip, dev
 	var first error
 	for range devices {
 		x := <-ch
+		// A save can happen while a network request is in flight. Discard the
+		// old binding's result instead of attaching it to the new assignment.
+		current := false
+		for _, latest := range m.equipment.Snapshot().Devices {
+			if latest.ID == x.d.ID && latest.SwitchEntity == x.d.SwitchEntity && latest.HighFrequency {
+				current = true
+				break
+			}
+		}
+		if !current {
+			continue
+		}
 		if x.e != nil {
 			m.setError(x.d, x.e.Error())
 			if first == nil {
@@ -178,41 +200,16 @@ func (m *Monitor) setError(d equipment.Device, msg string) {
 	m.mu.Unlock()
 }
 func (m *Monitor) accept(ctx context.Context, d equipment.Device, r outletReading, at time.Time) {
-	_ = m.db.RecordOutletSample(ctx, d.ID, at, r.Voltage, r.Current, r.Power)
-	m.mu.Lock()
-	det := m.detectors[d.ID]
-	if det == nil {
-		det = &detector{}
-		m.detectors[d.ID] = det
+	active, _, err := m.db.RecordEquipmentReading(ctx, d.ID, d.SwitchEntity, at, r.Voltage, r.Current, r.Power)
+	if err != nil {
+		m.setError(d, "activity storage: "+err.Error())
+		return
 	}
-	powered := r.Voltage >= 80 && r.Voltage <= 140
-	running := powered && (r.Current >= 0.005 || r.Power >= 0.5)
-	if running {
-		det.high++
-		det.low = 0
-	} else {
-		det.low++
-		det.high = 0
+	today, _, err := m.db.EquipmentActivity(ctx, d.ID, 30, m.loc)
+	if err != nil {
+		m.setError(d, "activity history: "+err.Error())
+		return
 	}
-	if !det.active && det.high >= 1 {
-		det.active = true
-		det.started = at
-		id, e := m.db.StartEquipmentEvent(ctx, d.ID, at, r.Current, r.Power)
-		if e == nil {
-			det.eventID = id
-		}
-	} else if det.active && running && det.eventID != 0 {
-		_ = m.db.UpdateEquipmentEvent(ctx, det.eventID, det.started, at, r.Current, r.Power, false)
-	} else if det.active && det.low >= 2 {
-		if det.eventID != 0 {
-			_ = m.db.UpdateEquipmentEvent(ctx, det.eventID, det.started, at, r.Current, r.Power, true)
-		}
-		det.active = false
-		det.eventID = 0
-	}
-	active := det.active
-	m.mu.Unlock()
-	today, _, _ := m.db.EquipmentActivity(ctx, d.ID, 30, m.loc)
 	m.mu.Lock()
 	m.statuses[d.ID] = DeviceStatus{ID: d.ID, Name: d.DisplayName, Enabled: true, Active: active, Voltage: r.Voltage, Current: r.Current, Power: r.Power, UpdatedAt: at, TodayCount: today}
 	m.mu.Unlock()

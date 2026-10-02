@@ -74,6 +74,7 @@ type githubAsset struct {
 
 type Updater struct {
 	o        Options
+	applyMu  sync.Mutex // Shared by automatic and manual update callers.
 	mu       sync.RWMutex
 	progress Progress
 }
@@ -211,6 +212,10 @@ func (u *Updater) releaseAssets(ctx context.Context, url string) ([]githubAsset,
 
 // Apply downloads, verifies, installs, repoints current, and restarts.
 func (u *Updater) Apply(ctx context.Context, rel *Release) (resultErr error) {
+	if !u.applyMu.TryLock() {
+		return fmt.Errorf("updater: another update is already running")
+	}
+	defer u.applyMu.Unlock()
 	if u.o.CurrentTag == "dev" {
 		return fmt.Errorf("updater: refusing to self-update a dev build")
 	}
@@ -293,7 +298,10 @@ func (u *Updater) ConfirmAfterStart(ctx context.Context, runningTag string, grac
 		case <-t.C:
 		}
 		if healthy == nil || healthy() {
-			_ = os.WriteFile(u.dir("state/CONFIRMED"), []byte(runningTag+"\n"), 0o644)
+			if err := os.WriteFile(u.dir("state/CONFIRMED"), []byte(runningTag+"\n"), 0o644); err != nil {
+				slog.Error("updater: cannot persist health confirmation", "err", err)
+				return
+			}
 			slog.Info("updater: version confirmed healthy", "tag", runningTag)
 		}
 	}()

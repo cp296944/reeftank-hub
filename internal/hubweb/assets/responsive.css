@@ -1,0 +1,57 @@
+/* Hub-only layout contract. The K7 editor retains its isolated stylesheet. */
+body[data-module] main,.home-shell{min-width:0}
+body[data-module] .module-page{padding-top:clamp(28px,5vw,64px)}
+.system-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:start}
+.system-grid>*,.water-form>*,.calc-settings>*,.calc-grid>*,.module-grid>*,.mapping-editor-grid>*{min-width:0}
+.system-grid dl div{gap:16px;align-items:baseline}
+.system-grid dt{flex-shrink:0}.system-grid dd{text-align:right;overflow-wrap:anywhere}
+.system-grid .power-card>p{margin:0;padding:0 16px 18px;line-height:1.65}
+.system-grid .setting-field{padding-inline:16px}
+.retention-settings .setting-field{padding:0}
+.system-actions,.dosing-actions,.activity-filters,.chart-range,.record-actions{flex-wrap:wrap}
+.system-actions .top-button,.retention-settings .top-button{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.mapping-editor-grid{grid-template-columns:minmax(0,1fr)}
+.mapping-device-row{grid-template-columns:42px minmax(120px,.65fr) minmax(0,1.35fr) auto}
+.mapping-editor-grid .monitor-toggle{display:flex;align-items:center}
+.mapping-name-field input,.mapping-entity-field select,.setting-field select,.setting-field input,.water-form input,.calc-settings input,.calc-grid input,.dataset-input input{width:100%;min-width:0;max-width:100%}
+.water-form{align-items:end}.water-form label{min-width:0}
+.water-form .check-row{padding-top:0;min-height:44px;align-self:end}
+.water-form .check-row input{width:20px;flex-shrink:0}
+.water-form-actions{min-height:44px;flex-wrap:wrap}.water-form-actions .top-button{min-height:44px}
+.calc-grid output,.parameter-card,.recent-change>div{overflow-wrap:anywhere}
+.update-panel{max-height:calc(100dvh - 36px);overflow-y:auto}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--aqua);outline-offset:3px}
+button:disabled{cursor:wait;opacity:.6}
+@media(min-width:1201px) and (max-width:1550px){.power-detail-grid,.power-summary-grid,.power-chart-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:1024px){
+  .topbar{height:auto;min-height:64px;gap:12px;flex-wrap:wrap;padding-block:12px}
+  .top-status{flex-wrap:wrap;justify-content:flex-end}
+  .system-facts{grid-template-columns:1fr}
+  .retention-settings{grid-template-columns:minmax(0,1fr)}
+  .retention-settings .top-button{justify-self:start}
+}
+@media(max-width:768px){
+  body[data-module] .topbar{position:relative;padding:12px 16px}
+  body[data-module] .nav{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px 20px}
+  body[data-module] .nav a{display:inline-flex;align-items:center;min-height:36px}
+  .home-topbar{height:auto;min-height:64px}
+  .water-chart-grid{grid-template-columns:minmax(0,1fr)}
+  .water-form,.calc-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mapping-device-row{grid-template-columns:42px minmax(0,1fr)}
+  .mapping-device-row .mapping-entity-field{grid-column:1/-1}
+  .mapping-device-row .monitor-toggle{grid-column:1/-1;justify-self:start}
+  .mapping-strip>header{flex-wrap:wrap;align-items:flex-start}
+  .strip-monitor-settings{flex-wrap:wrap}
+  .water-form-actions{grid-column:1/-1}
+  .thread-card>header,.activity-log>header{flex-wrap:wrap}
+}
+@media(max-width:480px){
+  .water-form,.calc-settings{grid-template-columns:minmax(0,1fr)}
+  .retention-settings .top-button{justify-self:stretch}
+  .system-actions>*{flex:1 1 100%}
+  .activity-table>div{grid-template-columns:minmax(0,1fr)}
+  .thread-card dl>div{grid-template-columns:100px minmax(0,1fr)}
+  .hero-links,.section-head{flex-wrap:wrap;gap:12px}
+  .home-topbar .brand{flex-shrink:0}.home-topbar .top-status{flex:1 1 auto}
+  .history-entry header,.update-target{flex-wrap:wrap}
+}

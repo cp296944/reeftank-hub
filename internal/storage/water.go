@@ -41,6 +41,14 @@ func parseLocalTime(v string) (time.Time, error) {
 }
 
 func (d *DB) InsertWaterRecord(ctx context.Context, v WaterRecord) (int64, error) {
+	return insertWaterRecord(ctx, d.db, v)
+}
+
+type waterExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func insertWaterRecord(ctx context.Context, executor waterExecutor, v WaterRecord) (int64, error) {
 	t, err := parseLocalTime(v.MeasuredAt)
 	if err != nil {
 		return 0, err
@@ -53,7 +61,7 @@ func (d *DB) InsertWaterRecord(ctx context.Context, v WaterRecord) (int64, error
 	if ref := strings.TrimSpace(v.SourceRef); ref != "" {
 		sourceRef = ref
 	}
-	res, err := d.db.ExecContext(ctx, `INSERT INTO water_records(measured_at,no3,po4,ph,sg,kh,ca,mg,water_change,change_liters,note,source,source_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.UTC().Format(time.RFC3339Nano), v.NO3, v.PO4, v.PH, v.SG, v.KH, v.CA, v.MG, v.WaterChange, v.ChangeLiters, strings.TrimSpace(v.Note), v.Source, sourceRef, now, now)
+	res, err := executor.ExecContext(ctx, `INSERT INTO water_records(measured_at,no3,po4,ph,sg,kh,ca,mg,water_change,change_liters,note,source,source_ref,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.UTC().Format(time.RFC3339Nano), v.NO3, v.PO4, v.PH, v.SG, v.KH, v.CA, v.MG, v.WaterChange, v.ChangeLiters, strings.TrimSpace(v.Note), v.Source, sourceRef, now, now)
 	if err != nil {
 		return 0, err
 	}
@@ -300,13 +308,38 @@ func (d *DB) registerWater(mux *http.ServeMux) {
 }
 
 func (d *DB) SeedWaterRecords(ctx context.Context, records []WaterRecord) error {
-	for _, v := range records {
-		if v.Source == "" {
-			v.Source = "excel_import"
-		}
-		if _, err := d.InsertWaterRecord(ctx, v); err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
-			return fmt.Errorf("seed %s: %w", v.SourceRef, err)
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	const marker = "water.builtin_seed_v1"
+	var done int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM app_settings WHERE key=?`, marker).Scan(&done); err != nil {
+		return err
+	}
+	if done != 0 {
+		return nil
+	}
+	// Older installations seeded on every start. Existing records OR the
+	// AUTOINCREMENT high-water mark mean this DB has already been used, even
+	// if the owner deliberately deleted every record. Never refill those DBs.
+	var used int
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM water_records) OR EXISTS(SELECT 1 FROM sqlite_sequence WHERE name='water_records' AND seq>0)`).Scan(&used); err != nil {
+		return err
+	}
+	if used == 0 {
+		for _, v := range records {
+			if v.Source == "" {
+				v.Source = "excel_import"
+			}
+			if _, err := insertWaterRecord(ctx, tx, v); err != nil {
+				return fmt.Errorf("seed %s: %w", v.SourceRef, err)
+			}
 		}
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, `INSERT INTO app_settings(key,value,updated_at) VALUES(?,'complete',datetime('now'))`, marker); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

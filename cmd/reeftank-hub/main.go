@@ -165,9 +165,6 @@ func run(args []string) error {
 		}
 	}()
 
-	var healthy atomic.Bool
-	healthy.Store(true)
-
 	up := updater.New(updater.Options{
 		Repo:        cfg.UpdateRepo,
 		Channel:     cfg.UpdateChannel,
@@ -177,7 +174,6 @@ func run(args []string) error {
 			return hubDB.Backup(filepath.Join(cfg.DataDir, "backups", "pre-ota-"+targetTag+"-"+time.Now().UTC().Format("20060102T150405Z")+".db"))
 		},
 	})
-	up.ConfirmAfterStart(ctx, version.Version, 45*time.Second, func() bool { return healthy.Load() })
 	cfgPath := os.Getenv("REEFTANK_CONFIG")
 	if cfgPath == "" {
 		cfgPath = filepath.Join(cfg.DataDir, "config.json")
@@ -323,6 +319,28 @@ func run(args []string) error {
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	appHandler := srv.Handler
+	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
+			probeCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			if err := hubDB.CheckHealth(probeCtx); err != nil {
+				http.Error(w, "local database health check failed", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		appHandler.ServeHTTP(w, r)
+	})
+	up.ConfirmAfterStart(ctx, version.Version, 45*time.Second, func() bool {
+		probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err := checkLocalHTTP(probeCtx, srv.Addr); err != nil {
+			slog.Error("OTA health check failed; version not confirmed", "err", err)
+			return false
+		}
+		return true
+	})
 
 	errCh := make(chan error, 1)
 	go func() {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cp296944/reeftank-hub/internal/equipment"
@@ -16,8 +17,9 @@ import (
 )
 
 type DB struct {
-	db   *sql.DB
-	path string
+	db         *sql.DB
+	path       string
+	activityMu sync.Mutex
 }
 
 func Open(path string) (*DB, error) {
@@ -28,19 +30,9 @@ func Open(path string) (*DB, error) {
 	if err == nil {
 		return d, nil
 	}
-	if _, statErr := os.Stat(path); statErr != nil {
-		return nil, err
-	}
-	corrupt := path + ".corrupt-" + time.Now().UTC().Format("20060102T150405Z")
-	if renameErr := os.Rename(path, corrupt); renameErr != nil {
-		return nil, fmt.Errorf("database open failed (%v), preserve corrupt database: %w", err, renameErr)
-	}
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if _, statErr := os.Stat(path + suffix); statErr == nil {
-			_ = os.Rename(path+suffix, corrupt+suffix)
-		}
-	}
-	return open(path)
+	// Never replace history automatically, even for confirmed corruption. A
+	// failed migration or temporary lock must not silently become an empty DB.
+	return nil, fmt.Errorf("open database %s (original files retained; recovery required): %w", path, err)
 }
 
 func open(path string) (*DB, error) {
@@ -159,67 +151,44 @@ func (d *DB) UpdateEquipmentEvent(ctx context.Context, id int64, started, at tim
 	return err
 }
 
-// BackfillEquipmentEvents rebuilds missing activity starts from the retained
-// raw outlet samples.  It is deliberately idempotent: an event with the exact
-// device/start timestamp is never inserted twice.  A single sample above the
-// threshold is enough because short top-off and roller runs can fit between
-// two polls; voltage must still be in the normal mains range to reject noise.
+// BackfillEquipmentEvents replays retained samples through the same persisted
+// transition path as live monitoring. Existing history is never reclassified.
 func (d *DB) BackfillEquipmentEvents(ctx context.Context, deviceID string, since time.Time) (int, error) {
 	rows, err := d.db.QueryContext(ctx, `SELECT sampled_at,voltage,current,power FROM outlet_samples WHERE device_id=? AND sampled_at>=? ORDER BY sampled_at`, deviceID, since.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
-	type event struct {
-		start, end  time.Time
-		peakCurrent float64
-		peakPower   float64
-		samples     int
+	type sample struct {
+		at      time.Time
+		v, a, w float64
 	}
-	var active *event
-	events := []event{}
+	var samples []sample
 	for rows.Next() {
 		var raw string
-		var voltage, current, power float64
-		if err = rows.Scan(&raw, &voltage, &current, &power); err != nil {
+		var s sample
+		if err = rows.Scan(&raw, &s.v, &s.a, &s.w); err != nil {
+			rows.Close()
 			return 0, err
 		}
-		at, parseErr := time.Parse(time.RFC3339Nano, raw)
-		if parseErr != nil {
-			continue
+		s.at, err = time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			rows.Close()
+			return 0, err
 		}
-		running := voltage >= 80 && voltage <= 140 && (current >= .005 || power >= .5)
-		if running {
-			if active == nil {
-				active = &event{start: at, end: at}
-			}
-			active.end = at
-			active.samples++
-			if current > active.peakCurrent {
-				active.peakCurrent = current
-			}
-			if power > active.peakPower {
-				active.peakPower = power
-			}
-		} else if active != nil {
-			active.end = at
-			events = append(events, *active)
-			active = nil
-		}
+		samples = append(samples, s)
 	}
-	if err = rows.Err(); err != nil {
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
 		return 0, err
 	}
-	if active != nil {
-		events = append(events, *active)
-	}
 	inserted := 0
-	for _, e := range events {
-		result, execErr := d.db.ExecContext(ctx, `INSERT INTO equipment_events(device_id,started_at,ended_at,duration_seconds,peak_current,peak_power,samples) SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM equipment_events WHERE device_id=? AND started_at=?)`, deviceID, e.start.UTC().Format(time.RFC3339Nano), e.end.UTC().Format(time.RFC3339Nano), e.end.Sub(e.start).Seconds(), e.peakCurrent, e.peakPower, e.samples, deviceID, e.start.UTC().Format(time.RFC3339Nano))
-		if execErr != nil {
-			return inserted, execErr
+	for _, s := range samples {
+		_, created, e := d.RecordEquipmentReading(ctx, deviceID, "", s.at, s.v, s.a, s.w)
+		if e != nil {
+			return inserted, e
 		}
-		if n, _ := result.RowsAffected(); n > 0 {
+		if created {
 			inserted++
 		}
 	}

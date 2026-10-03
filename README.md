@@ -16,6 +16,7 @@ Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口
 - `/dosing/`：魔點四頭滴定
 - `/calculator/`：獨立滴定計算工具（只計算）
 - `/power/`：HA 電源監控與設備映射
+- `/jebao/`：JEBAO 主馬與造浪的 LAN 監控、歷史、轉速／強度、餵食及 IP 設定（四台已登錄 MAC）
 - `/water/`：水質與換水
 - `/system/`：服務狀態、備份與 OTA
 - `/thread/`：ESP32-C6 RCP、OTBR 與 HA Matter 狀態
@@ -30,9 +31,9 @@ Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口
 - Release：`hub-v*`
 - OTA 資產：`reeftank-hub-linux-arm64`
 
-目前 Raspberry Pi 仍安全運行舊 K7 `pi-v1.0.4`。`hub-v0.1.0` 與過渡版
-`pi-v1.1.0` 已發布，公開下載、雜湊、資料遷移及隔離回滾演練均已通過；
-實機只會在使用者手動確認 OTA 與 bootstrap 後切換。
+目前 Raspberry Pi 已運行 ReefTank Hub，並保留每次部署的獨立 release 目錄與
+上一版回滾點。正式版本自 `hub-v1.0.0` 起採 1.x.x；完整歷代內容收錄於
+[CHANGELOG.md](CHANGELOG.md)，同一份紀錄也嵌入右上角版號視窗，離線仍可查看。
 
 ## K7 雙專案同步原則
 

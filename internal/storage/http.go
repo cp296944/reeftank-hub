@@ -19,7 +19,8 @@ func (d *DB) Register(mux *http.ServeMux) {
 			return
 		}
 		temps, _ := d.TemperatureCount(r.Context())
-		writeJSON(w, http.StatusOK, map[string]any{"database": filepath.Base(d.path), "samples": count, "temperature_samples": temps, "retention_days": d.RetentionDays(r.Context())})
+		jebaoSamples, _ := d.JebaoSampleCount(r.Context())
+		writeJSON(w, http.StatusOK, map[string]any{"database": filepath.Base(d.path), "samples": count, "temperature_samples": temps, "jebao_samples": jebaoSamples, "retention_days": d.RetentionDays(r.Context())})
 	})
 	mux.HandleFunc("GET /api/hub/storage/retention", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"retention_days": d.RetentionDays(r.Context()), "options": []int{30, 90, 180, 365, 0}})

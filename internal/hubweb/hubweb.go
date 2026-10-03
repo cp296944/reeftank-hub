@@ -63,7 +63,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func isModulePath(p string) bool {
 	switch p {
-	case "/dosing", "/dosing/", "/calculator", "/calculator/", "/power", "/power/", "/water", "/water/", "/system", "/system/", "/thread", "/thread/":
+	case "/dosing", "/dosing/", "/calculator", "/calculator/", "/power", "/power/", "/water", "/water/", "/system", "/system/", "/thread", "/thread/", "/jebao", "/jebao/":
 		return true
 	default:
 		return false
@@ -88,6 +88,7 @@ func (h *handler) serveModule(w http.ResponseWriter, r *http.Request) {
 		"water":      {"水質、水溫與換水", "樹莓派本機資料庫", "手動紀錄、完整歷史與獨立溫度來源。"},
 		"system":     {"系統狀態", "連線、版本、備份與 OTA", "檢查資料來源、資料庫及更新狀態。"},
 		"thread":     {"Thread / Matter", "ESP32-C6 RCP與樹莓派OTBR", "管理USB無線電、Thread邊界路由器與HA Matter連線。"},
+		"jebao":      {"JEBAO 造浪與主馬", "四台設備的 LAN 監控與主馬速度控制", "設備探索、設定速度、模式與故障狀態。"},
 	}
 	copyText := string(b)
 	info := replacements[name]
@@ -134,6 +135,7 @@ func (h *handler) serveStatus(w http.ResponseWriter) {
 			"water_quality":  "available",
 			"temperature":    "available",
 			"dosing":         "simulation_available",
+			"jebao":          "read_only_monitor",
 		},
 	})
 }

@@ -8,11 +8,14 @@
   <link rel="stylesheet" href="/hub-assets/app.css">
   <link rel="stylesheet" href="/hub-assets/console.css">
   <link rel="stylesheet" href="/hub-assets/responsive.css">
+  <link rel="stylesheet" href="/hub-assets/console-v2.css">
+  <script src="/hub-assets/theme.js"></script>
 </head>
 <body data-module="{{MODULE}}">
   <header class="topbar">
-    <a class="brand brand-link" href="/"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>返回系統首頁</small></div></a>
-    <nav class="nav"><a href="/K7/">K7</a><a href="/dosing/">滴定</a><a href="/power/">電源</a><a href="/water/">水質</a><a href="/system/">系統</a></nav>
+    <a class="brand brand-link" href="/"><span class="brand-mark">♆</span><div><strong>ReefTank <span>Hub</span></strong><small>返回系統首頁</small></div></a>
+    <nav class="nav hub-nav" aria-label="主要功能"><a href="/">總覽</a><a href="/K7/">K7</a><a href="/dosing/">滴定</a><a href="/calculator/">計算</a><a href="/power/">電源</a><a href="/jebao/">JEBAO</a><a href="/water/">水質</a><a href="/thread/">Thread</a><a href="/system/">系統</a></nav>
+    <div class="top-status module-status"><span class="status-signal" aria-hidden="true"></span><span id="hub-status">系統啟動中</span><button id="version" class="version version-button" type="button" aria-label="查看版本紀錄">--</button></div>
   </header>
   <main class="module-page">
     <p class="eyebrow">REEFTANK HUB / {{MODULE}}</p>
@@ -22,6 +25,7 @@
     <section id="module-content" class="module-content hidden"></section>
     <section id="system-bootstrap" class="notice hidden"><div><strong>Bootstrap 尚未完成</strong><p>完成一次性系統整合後，Hub 相關服務即可由網頁 OTA。</p></div><code id="bootstrap-command"></code></section>
   </main>
+  <script src="/hub-assets/jebao.js" defer></script>
   <script src="/hub-assets/app.js" defer></script>
 </body>
 </html>

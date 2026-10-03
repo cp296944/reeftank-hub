@@ -2,8 +2,9 @@ package storage
 
 import "context"
 
-// CheckHealth verifies core tables and writable storage without retaining a
-// probe record. External HA, cloud and radio availability are not prerequisites.
+// CheckHealth verifies that the core schema is readable. It intentionally does
+// not compete for SQLite's writer lock while HA history is being backfilled.
+// External HA, cloud and radio availability are not prerequisites.
 func (d *DB) CheckHealth(ctx context.Context) error {
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -14,6 +15,7 @@ func (d *DB) CheckHealth(ctx context.Context) error {
 		`SELECT id FROM water_records LIMIT 1`,
 		`SELECT entity_id FROM entity_samples LIMIT 1`,
 		`SELECT device_id FROM equipment_events LIMIT 1`,
+		`SELECT device_id FROM jebao_samples LIMIT 1`,
 	} {
 		rows, err := tx.QueryContext(ctx, query)
 		if err != nil {
@@ -23,6 +25,5 @@ func (d *DB) CheckHealth(ctx context.Context) error {
 			return err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO app_settings(key,value,updated_at) VALUES('health.probe','ok',datetime('now')) ON CONFLICT(key) DO UPDATE SET value='ok'`)
-	return err
+	return nil
 }

@@ -69,6 +69,8 @@ func (d *DB) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_outlet_samples_time ON outlet_samples(sampled_at)`,
 		`CREATE TABLE IF NOT EXISTS equipment_events(id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, duration_seconds REAL, peak_current REAL NOT NULL DEFAULT 0, peak_power REAL NOT NULL DEFAULT 0, samples INTEGER NOT NULL DEFAULT 0)`,
 		`CREATE INDEX IF NOT EXISTS idx_equipment_events_device_time ON equipment_events(device_id,started_at)`,
+		`CREATE TABLE IF NOT EXISTS jebao_samples(device_id TEXT NOT NULL, sampled_at TEXT NOT NULL, connected INTEGER NOT NULL, stale INTEGER NOT NULL, speed REAL, frequency REAL, mode TEXT, switch_on INTEGER, fault INTEGER NOT NULL DEFAULT 0, attributes_json TEXT NOT NULL DEFAULT '{}', PRIMARY KEY(device_id,sampled_at))`,
+		`CREATE INDEX IF NOT EXISTS idx_jebao_samples_device_time ON jebao_samples(device_id,sampled_at)`,
 		`INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(1,datetime('now'))`,
 		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('retention.entity_samples_days','0',datetime('now'))`,
 		`INSERT OR IGNORE INTO app_settings(key,value,updated_at) VALUES('temperature.source','direct',datetime('now'))`,

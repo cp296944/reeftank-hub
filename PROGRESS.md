@@ -96,3 +96,84 @@
 - [x] 滴定領域模型、模擬器與完整介面（BLE實機傳輸仍屬Phase 10）。
 - [x] 建立ESP32-C6 RCP `rcp-v0.1.2`，Release資產SHA-256固定並由刷寫器強制驗證。
 - [x] 建立Thread維護systemd／polkit閘門及Hub一鍵刷寫、回滾、OTBR安裝與重啟介面。
+
+## 2026-10-02 JEBAO LAN 實機整合
+
+- 新增 `/jebao/` 與首頁入口；只讀 UDP 探索及 TCP 狀態，每 30 秒讀取，不提供設備控制。
+- 登錄 MDP-10000、GMP-30 ×2、DLW-20；實機 MAC 驗證、未知模型拒絕、斷線保留舊值並標示過期。
+- `go test ./...`、JavaScript 語法、Linux arm64 建置通過；瀏覽器頁面已驗證。
+- 已部署 Pi 192.168.0.149：hub-v0.12.0-jebao.1；備份 hub-20261002T053937Z.db，保留 hub-v0.12.0 回滾。
+- Pi 三台成功且下一輪 last_success 前進：MDP 83%、GMP（E1:00）35%、DLW 40%；另一台 GMP（C7:88）未回應。設定百分比不是實測流量，尚待 App 核對。
+- 已保存三台 IP 至 data/jebao.json；實機輸出在工作區 JEBAO/REEFHUB_LAN_STATUS_20261002.json。
+- 未發布 GitHub release；原 auto_update=true 保留。未來較新正式版本若不含此次修改，可能覆蓋監控功能。
+- 既有 Hub 資料庫健康檢查偶發 503，原 0.12.0 日誌亦有 database locked／OTA health failure；JEBAO 讀取不依賴此資料庫，三台仍持續更新。此既有問題另待排查，不宣稱全服務健康已穩定。
+
+## 2026-10-02 主馬速度控制
+
+- 使用者回報一次性 LAN 80% 測試在 App 看起來成功；是否使用行動網路未明，因此只記錄 App 核對成功，不宣稱排除 App 本地連線後的雲端驗證。
+- 新增 MDP-10000 主馬速度輸入與套用，POST /api/hub/jebao/return-pump/speed；MAC + product key 核對、1–100 整數、關閉／餵食／排程拒絕、單欄位 flag、ACK 與讀回確認、不自動重送。
+- 造浪仍只讀，沒有啟停／模式／餵食／排程控制。寫入不依賴資料庫。
+- 全套 go test ./... 與 JS 語法檢查、arm64 建置通過；部署 hub-v0.12.0-jebao.2，保留 jebao.1 回滾，資料庫未更動。
+瀏覽器實測：套用主馬速度 80% → 設備 ACK → 讀回 80% → 頁面顯示確認成功；截图 JEBAO/REEFHUB_CONTROL_20261002.png。
+2026-10-02：依使用者確認將 wavemaker-1 名稱改為 06-GMP30R、wavemaker-2 改為 13-GMP30L，MAC 配對不變；部署 jebao.3 並以實機 API 驗證名稱。
+
+## 2026-10-02 主馬餵食控制（待實機測試）
+新增開始／結束餵食按鈕與 POST /api/hub/jebao/return-pump/feeding，JSON {"enabled":true} 或 false。只寫 FeedSwitch id=2，沿用 FeedTime，不寫速度／模式／排程；開始時拒絕關機或排程啟用，結束允許清除餵食旗標。ACK + 讀回確認，不自動重送。AutoMode 可由設備自行變化。未宣稱實際停轉／降速、倒數、恢復與雲端行為已驗證。
+完整測試、模擬開始／結束握手與單一欄位寫入測試通過。部署 hub-v0.12.0-jebao.4；僅驗證頁面與本地狀態，未觸發實機餵食，待使用者回家自行測試。
+
+2026-10-02：Hub 首頁與 dosing、calculator、power、jebao、water、thread、system 全面套用黑底專業控制台視覺；K7 維持獨立既有介面。新增日覽／夜覽／依裝置時間自動切換，選擇保存在瀏覽器本機。Jebao 頁面使用四欄設備網格，支援 3–4 台造浪與主馬配置，平板兩欄、手機一欄。本機測試 8 頁 × 6 寬度、主題保存、斷線表單及 JS 語法通過，arm64 建置後直接部署 `hub-v0.12.0-jebao.5-local-ui`，未上傳 GitHub；`.4` 保留為回滾目標。既有 SQLite `/healthz` 仍回 503，頁面、storage API、Jebao API 與服務維持可用，需另案處理。
+
+## 2026-10-02 Cockpit 實作與 Jebao 歷史
+
+- 依實際瀏覽器驗收重建首頁為高密度水族控制台：即時水溫與能源曲線、最新水質、生命維持設備、四台 Jebao 摘要及模組入口；全 Hub 頁面共用日／夜設計，K7 資產與功能未更動。
+- Jebao 四台設備各有連線、設定值、模式、IP、最後回報、故障與 24 小時／7 天／30 天歷史曲線；主馬原有速度與餵食控制保留，造浪維持唯讀。
+- 新增 `jebao_samples`，每 30 秒寫入全部四台設備，包含離線／舊資料；新增 `/api/hub/jebao/history` 與 storage status 樣本數。Retention、備份及健康 schema 檢查涵蓋新資料表。
+- 將 `/healthz` 改為核心 schema 唯讀檢查，避免 HA 多年歷史回填持有 SQLite writer lock 時把正常服務誤判為失敗；連續健康檢查已通過。
+- `go test ./...`、JavaScript 語法及 8 頁 × 6 寬度瀏覽器測試通過。直接部署 `hub-v0.12.0-jebao.6-cockpit` 到 192.168.0.149，服務 active、版本已標記 CONFIRMED、`/`、`/jebao/`、`/K7/` 均為 200；Jebao 歷史樣本已持續增加。未上傳 GitHub，`.5` 保留為回滾版本。
+
+## 2026-10-02 三欄單屏控制台
+
+- 依實機畫面與參考圖再次重排首頁：桌面使用左側系統／水質、中間水溫／水流／生命維持、右側能源／快速控制／最近紀錄的三欄卡片拼接；移除長頁式大標題與大型模組清單。
+- 平板改雙欄，手機改單欄；既有 API、設備操作、日夜模式、Jebao 歷史與 K7 獨立頁面均保留。
+- 8 頁 × 6 寬度測試與完整 `go test ./...` 通過，實機視覺驗收後部署 `hub-v0.12.0-jebao.7-console`；服務 active、健康檢查通過，`.6` 保留為回滾版本。未上傳 GitHub。
+
+## 2026-10-02 目標稿一比一資料儀表板
+
+- 依使用者提供的 1680×945 目標圖重建首頁：完整頂部導覽、系統狀態、水溫雙圖、即時功率、本月耗電、七項水質、生命維持、三頭滴定、補水／捲棉、Raspberry Pi 與四台 Jebao 水流紀錄採相同比例的四層滿版配置。
+- 首頁全部卡片使用現有 API 真實資料；服務重啟後的水溫首次輪詢期間，會顯示 SQLite 最後一筆有效水溫，避免把暫態 `0` 當成缸溫。資料採樣與設備控制邏輯未更動。
+- 移除前一版不符合目標稿的水族照片素材。K7 路由與資產維持原狀；其餘模組沿用共用黑色控制台主題與日覽／夜覽／自動模式。
+- 8 頁 × 6 寬度瀏覽器測試與 JavaScript 語法檢查通過；Go 套件除 Windows 既有的 symlink 權限測試外通過。部署 `hub-v0.12.0-jebao.8-target-dashboard`，服務 active、`/healthz`、`/K7/` 均為 200。四台 Jebao（包含離線設備）實機各有 665 筆 24 小時紀錄，總樣本 2,636 筆並持續增加。未上傳 GitHub，`.7-console` 保留為回滾版本。
+
+## 2026-10-02 全模組介面統一
+
+- 在首頁及 K7 完全不調整的前提下，將滴定、計算、電源、Jebao、水質、Thread／Matter、系統七個頁面套用首頁的黑底、青色細框、緊湊資訊卡、狀態色與頂部導覽風格。
+- 僅修改 `module.html` 共用外殼與 `console-v2.css` 模組頁樣式；API、資料處理、事件綁定、設備控制、表單送出及儲存邏輯均未更動。
+- 七個頁面逐頁以 1680×945 檢查，另完成 8 頁 × 6 寬度瀏覽器測試、JavaScript 語法與 `internal/hubweb` Go 測試，無溢位或頁面錯誤。
+- 直接部署 `hub-v0.12.0-jebao.9-module-dashboard`；服務 active、健康檢查正常，首頁、K7 與七個模組頁均回應 200。未上傳 GitHub，`.8-target-dashboard` 保留為回滾版本。
+
+## 部署結果
+已部署 hub-v0.12.0-jebao.10-wave-flow（local-wave-flow, 2026-10-03），current 指向正確 releases 目錄，healthz HTTP 200；保留 jebao.9 作為 PREVIOUS。新版頁面三台造浪強度表單均完成載入，仍保留歷史曲線與主馬速度／餵食控制。
+13-GMP30L 仍為 35%，DLW-20 仍為 40%，06-GMP30R 未連線；未執行實機造浪寫入。Docker 服務運行，但 docker ps 目前無執行中的容器。
+首次部署因初始化超過 20 秒而回滾，重試時發現部署目錄文字替換誤將 .10 改寫為 .9-module-dashboard0；已修正並重新安裝至正確 .10-wave-flow。後續初始化及健康正常。多餘目錄保留未刪除，不影響 current。
+
+## 2026-10-03 已確認版面實作與部署（jebao.11）
+
+- 首頁滴定狀態由原先只顯示前三頭改為完整顯示 ALK、Ca、Mg、NP 四個滴定頭；沿用既有 `/api/hub/dosing` 資料與操作邏輯。
+- `/power/` 在桌面寬度將三組排插詳情、三組能耗摘要、三張趨勢圖與三組設備對應設定固定為一排三欄；窄螢幕仍依既有響應式規則收合。
+- `/jebao/` 第一排固定四台設備狀態與歷史，第二排固定四張個別設定卡。主馬保留轉速與餵食控制，三台造浪保留個別強度控制，四台設備均可個別或一次儲存 IP。
+- 沒有新增或修改 API、設備寫入規則、資料庫結構或操作流程；Jebao 四台設備每 30 秒歷史紀錄持續運作，離線設備仍會留下樣本。
+- `/K7/` 的頁面與資產未修改。
+- UI 驗證通過：8 個頁面 × 320、390、768、1024、1366、1920 六種寬度，無水平溢位、無 JavaScript 頁面錯誤；另驗證首頁 4 個滴定頭、Power 桌面三欄、Jebao 4 狀態卡與 4 設定卡。
+- Go 測試通過：`go test ./internal/hubweb`、`go test ./internal/jebao ./internal/storage`。
+- 已直接部署 `hub-v0.12.0-jebao.11-approved-layout` 到樹莓派；服務 active、`/healthz` 正常，首頁、Power、Jebao、K7 與其餘模組頁均回應 200。保留 `.10-wave-flow` 作為回滾版本。
+- 未上傳 GitHub。
+
+2026-10-03 jebao.12-release-history：嵌入 jebao.1–.12 本地版號更新紀錄，更新歷程 API 合併 GitHub 與本地紀錄，離線保留本地摘要；視窗區分本地部署與 GitHub 發布。完整 Go／JS 檢查通過，部署 jebao.12，保留 jebao.11 回滾；實機 API 已核對 12 筆本地紀錄。未發布 GitHub。
+
+## 2026-10-03 正式版 1.0.0
+
+- 修正目標首頁 CSS 隱藏右上角版號與「檢查更新」的問題，兩個操作恢復為緊湊按鈕並保留原 OTA 流程。
+- 盤點 Git 標籤、GitHub Releases、README、`PROGRESS.md` 與直接部署紀錄，建立 49 筆內嵌版本紀錄：36 個既有 Hub 正式版、12 個 JEBAO 本地迭代及 `hub-v1.0.0`。
+- 版本歷程在 GitHub 暫時不可用時仍完整顯示；連線成功時會合併正式發布時間與 Release 連結，且不重複同一版號。
+- 正式版號由 0.x 開發階段提升為 `hub-v1.0.0`，作為新介面與 JEBAO 整合後的 1.x 起點。
+- K7 資產與控制邏輯未修改。

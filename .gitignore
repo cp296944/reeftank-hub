@@ -2,5 +2,8 @@
 /k7-pi-bridge
 /k7-pi-bridge.exe
 /dist/
+.tmp-gocache/
+review-*.png
+*-review.png
 *.exe
 *.test

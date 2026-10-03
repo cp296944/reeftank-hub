@@ -31,6 +31,7 @@ import (
 	"github.com/cp296944/reeftank-hub/internal/homeassistant"
 	"github.com/cp296944/reeftank-hub/internal/httpapi"
 	"github.com/cp296944/reeftank-hub/internal/hubweb"
+	"github.com/cp296944/reeftank-hub/internal/jebao"
 	"github.com/cp296944/reeftank-hub/internal/lamp"
 	"github.com/cp296944/reeftank-hub/internal/piapi"
 	"github.com/cp296944/reeftank-hub/internal/piweb"
@@ -124,6 +125,12 @@ func run(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	jebaoMonitor, err := jebao.Open(jebao.DefaultPath(cfg.DataDir))
+	if err != nil {
+		return fmt.Errorf("open JEBAO settings: %w", err)
+	}
+	jebaoMonitor.SetHistoryStore(hubDB)
+	go jebaoMonitor.Run(ctx)
 	go haSync.Run(ctx)
 	go temperaturePoller.Run(ctx)
 	go highFrequencyMonitor.Run(ctx)
@@ -294,7 +301,7 @@ func run(args []string) error {
 
 	srv := &http.Server{
 		Addr: cfg.Listen,
-		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, panel.register, threadMonitor.Register, highFrequencyMonitor.Register, func(mux *http.ServeMux) {
+		Handler: routes(cfg, cfgPath, up, &autoUpdate, hubHandler, setup.register, diag.register, equipmentStore.Register, haAPI.Register, temperaturePoller.Register, dosingStore.Register, hubDB.Register, panel.register, threadMonitor.Register, highFrequencyMonitor.Register, jebaoMonitor.Register, func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /api/hub/k7/session", func(w http.ResponseWriter, r *http.Request) {
 				lampConn.Touch(2 * time.Minute)
 				_, err := lampConn.ReadAll()
@@ -533,7 +540,7 @@ func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *
 			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet,
 				"https://api.github.com/repos/"+cfg.UpdateRepo+"/releases?per_page=40", nil)
 			req.Header.Set("Accept", "application/vnd.github+json")
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 			if err == nil && resp.StatusCode == http.StatusOK {
 				var raw []struct {
 					TagName     string `json:"tag_name"`
@@ -564,10 +571,34 @@ func routes(cfg config.Config, cfgPath string, up *updater.Updater, autoUpdate *
 				_ = resp.Body.Close()
 			}
 		}
-		if body == nil {
-			writeJSON(w, http.StatusBadGateway, map[string]any{"error": "history unavailable"})
-			return
+		var remote struct {
+			Releases []map[string]any `json:"releases"`
 		}
+		if body != nil {
+			_ = json.Unmarshal(body, &remote)
+		}
+		combined := version.LocalHistory()
+		seen := map[string]map[string]any{}
+		for _, entry := range combined {
+			tag := entry["tag"].(string)
+			seen[tag] = entry
+			if local, _ := entry["local"].(bool); !local && entry["url"] == "" {
+				entry["url"] = "https://github.com/" + cfg.UpdateRepo + "/releases/tag/" + tag
+			}
+		}
+		for _, entry := range remote.Releases {
+			tag, _ := entry["tag"].(string)
+			if embedded, ok := seen[tag]; ok {
+				for _, key := range []string{"url", "published_at", "prerelease"} {
+					if value, exists := entry[key]; exists {
+						embedded[key] = value
+					}
+				}
+				continue
+			}
+			combined = append(combined, entry)
+		}
+		body, _ = json.Marshal(map[string]any{"current": version.Version, "releases": combined, "github_available": body != nil})
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(body)
 	})

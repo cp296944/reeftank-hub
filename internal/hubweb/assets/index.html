@@ -9,37 +9,75 @@
   <link rel="stylesheet" href="/hub-assets/app.css">
   <link rel="stylesheet" href="/hub-assets/console.css">
   <link rel="stylesheet" href="/hub-assets/responsive.css">
+  <link rel="stylesheet" href="/hub-assets/console-v2.css">
+  <script src="/hub-assets/theme.js"></script>
 </head>
 <body data-page="home" class="hub-home">
   <header class="topbar home-topbar">
     <a class="brand brand-link" href="/" aria-label="ReefTank Hub 首頁"><span class="brand-mark">R</span><div><strong>ReefTank Hub</strong><small>海水缸控制中心</small></div></a>
-    <div class="top-status"><span class="status-signal" aria-hidden="true"></span><span id="hub-status">系統啟動中</span><button id="update-check" class="top-button" type="button">檢查更新</button><label class="auto-update"><input id="update-auto" type="checkbox">自動</label><span id="update-status"></span><button id="version" class="version version-button" type="button" aria-label="查看版本紀錄">--</button></div>
+    <nav class="nav hub-nav" aria-label="主要功能"><a class="active" href="/">總覽</a><a href="/K7/">K7</a><a href="/dosing/">滴定</a><a href="/calculator/">計算</a><a href="/power/">電源</a><a href="/jebao/">JEBAO</a><a href="/water/">水質</a><a href="/thread/">Thread</a><a href="/system/">系統</a></nav>
+    <div class="top-status"><span class="status-signal" aria-hidden="true"></span><span id="hub-status">Raspberry Pi</span><button id="update-check" class="top-button" type="button">檢查更新</button><label class="auto-update"><input id="update-auto" type="checkbox">自動</label><span id="update-status"></span><button id="version" class="version version-button" type="button" aria-label="查看版本紀錄">--</button></div>
+    <div class="header-clock"><span id="header-date">--</span><strong id="header-time">--:--</strong></div>
   </header>
-  <main class="home-shell">
-    <section class="home-hero" aria-labelledby="overview-title">
-      <div class="hero-copy"><p class="eyebrow">REEF OPERATIONS</p><h1 id="overview-title">你的海水缸，<br><span>一眼掌握。</span></h1><p>水質、能源與設備狀態集中在同一個本機控制中心。</p><div class="hero-links"><a class="primary-action" href="/water/">查看水質</a><a class="text-action" href="/system/">系統狀態 <span aria-hidden="true">→</span></a></div></div>
-      <aside class="hero-instrument" aria-label="目前水溫"><div class="instrument-head"><span>WATER TEMP</span><span class="instrument-state">LIVE</span></div><strong><span id="home-temperature">--</span><small>°C</small></strong><p id="home-temperature-note">正在取得獨立水溫資料</p><div class="instrument-scale" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></aside>
-    </section>
-    <section class="home-section water-section" aria-labelledby="water-title">
-      <div class="section-head compact"><div><p class="eyebrow">WATER PARAMETERS</p><h2 id="water-title">最新水質</h2></div><a href="/water/">紀錄與歷史 <span aria-hidden="true">→</span></a></div>
-      <div id="water-dashboard" class="water-dashboard" aria-live="polite"><article class="parameter-card loading-card"><span>正在載入水質資料</span><strong>--</strong></article></div>
-    </section>
-    <section class="home-section energy-section" aria-labelledby="energy-title">
-      <div class="section-head"><div><p class="eyebrow">ENERGY MANAGER</p><h2 id="energy-title">能源總管</h2></div><a href="/power/">完整電源監控 <span aria-hidden="true">→</span></a></div>
-      <div class="energy-manager"><div class="metric-grid energy-summary" aria-label="能源摘要"><article class="metric"><span>設備狀態</span><strong id="home-devices">讀取中</strong><small>由 HA 管理及告警</small></article><article class="metric"><span>即時功率</span><strong id="home-power">-- W</strong><small>三組排插合計</small></article><article class="metric accent"><span>本月總耗電量</span><strong id="home-month">-- kWh</strong><small>3A31 + 3F2D + BFB9</small></article><article class="metric"><span>水質紀錄</span><strong id="home-water">--</strong><small>樹莓派本機資料庫</small></article></div><div id="life-support" class="metric-grid energy-devices" aria-live="polite"><article class="metric"><span>生命維持設備</span><strong>讀取中</strong><small>等待 HA 即時快取</small></article></div></div>
-    </section>
-    <section class="home-section modules-section" aria-labelledby="modules-title">
-      <div class="section-head"><div><p class="eyebrow">MODULES</p><h2 id="modules-title">設備與資料</h2></div></div>
-      <div class="module-grid home-module-grid">
-        <a class="module ready module-feature" href="/K7/"><div class="module-symbol">K7</div><div><h3>K7 燈具</h3><p>三燈連動、排程與手動控制</p></div><span>可使用</span></a>
-        <a class="module ready" href="/water/"><div class="module-symbol">H₂O</div><div><h3>水質與水溫</h3><p>七項水質、溫度、換水與歷史</p></div><span id="module-water">本機資料</span></a>
-        <a class="module ready" href="/power/"><div class="module-symbol">W</div><div><h3>電源監控</h3><p>18 路插座、即時與歷史用電</p></div><span id="module-power">連線中</span></a>
-        <a class="module ready" href="/dosing/"><div class="module-symbol">4×</div><div><h3>魔點滴定</h3><p>四泵頭、排程、校正與液量</p></div><span id="module-dosing">模擬模式</span></a>
-        <a class="module ready" href="/calculator/"><div class="module-symbol">∑</div><div><h3>滴定計算</h3><p>水量、濃度、安全上限與劑量換算</p></div><span>僅計算</span></a>
-        <a class="module" href="/thread/"><div class="module-symbol">TH</div><div><h3>Thread / Matter</h3><p>ESP32-C6 RCP、OTBR 與 HA Matter</p></div><span id="module-thread">準備中</span></a>
-        <a class="module ready module-system" href="/system/"><div class="module-symbol">SYS</div><div><h3>系統監控與設定</h3><p>CPU、記憶體、儲存、資料來源、備份與 OTA</p></div><span>系統管理</span></a>
+  <main class="target-dashboard">
+    <article class="target-card target-system">
+      <header><h2><span class="card-icon">✓</span> 系統狀態</h2><a href="/system/">›</a></header>
+      <div class="system-ok-block"><span class="system-ring">✓</span><div><strong id="home-devices">讀取中</strong><small>正在確認所有設備</small></div></div>
+    </article>
+
+    <article class="target-card target-temp-main">
+      <header><h2><span class="card-icon">♨</span> 水溫</h2><span class="refresh-mark">↻</span></header>
+      <div class="target-temp-summary"><strong><span id="home-temperature">--</span><small>°C</small></strong><dl><div><dt>目標</dt><dd>26.0 °C</dd></div><div><dt>最高</dt><dd id="target-temp-high">--</dd></div><div><dt>最低</dt><dd id="target-temp-low">--</dd></div></dl></div>
+      <canvas id="home-temp-chart-main" aria-label="24小時水溫趨勢"></canvas><p id="home-temperature-note" class="sr-only">正在取得水溫</p>
+    </article>
+
+    <article class="target-card target-power-now">
+      <header><h2><span class="card-icon">ϟ</span> 即時功率</h2><a href="/power/">›</a></header>
+      <div class="target-power-summary"><strong id="home-power">-- W</strong><dl><div><dt>今日平均</dt><dd id="target-power-average">--</dd></div><div><dt>今日最高</dt><dd id="target-power-high">--</dd></div></dl></div>
+      <canvas id="home-power-chart" aria-label="即時功率趨勢"></canvas>
+    </article>
+
+    <article class="target-card target-temp-trend">
+      <header><h2>水質趨勢（24 小時）</h2><label class="metric-select">水溫 <span>⌄</span></label></header>
+      <canvas id="home-temp-chart" aria-label="24小時水溫趨勢"></canvas>
+      <div class="trend-stats"><div><strong id="trend-temp-low">--</strong><span>最小</span></div><div><strong id="trend-temp-high">--</strong><span>最大</span></div><div><strong id="trend-temp-current">--</strong><span>現在</span></div></div>
+    </article>
+
+    <article class="target-card target-water">
+      <header><h2><span class="card-icon">●</span> 最新水質</h2><span class="water-updated">更新時間　<b id="target-water-time">--</b>　›</span></header>
+      <div id="water-dashboard" class="target-water-grid" aria-live="polite"><article class="parameter-card loading-card"><span>載入中</span><strong>--</strong></article></div>
+      <span id="home-water" class="sr-only">--</span>
+    </article>
+
+    <article class="target-card target-power-month">
+      <header><h2><span class="card-icon">▥</span> 本月耗電</h2><a href="/power/">›</a></header>
+      <div class="month-summary"><strong id="home-month">-- kWh</strong><div><span>上月　<b id="target-last-month">--</b></span><em id="target-month-change">● 即時累計</em></div></div>
+      <canvas id="home-month-chart" aria-label="本月每日耗電"></canvas>
+    </article>
+
+    <article class="target-card target-life">
+      <header><h2><span class="card-icon">⌁</span> 生命維持設備</h2><a href="/power/">›</a></header>
+      <div id="life-support" class="target-life-list" aria-live="polite"><p class="muted">等待 HA 即時快取</p></div>
+    </article>
+
+    <article class="target-card target-dosing">
+      <header><h2><span class="card-icon">⚗</span> 滴定狀態</h2><a href="/dosing/">›</a></header>
+      <div id="target-dosing-grid" class="target-dosing-grid"><p class="muted">正在讀取滴定狀態</p></div>
+    </article>
+
+    <section class="target-utility">
+      <div class="utility-pair">
+        <article class="target-card utility-card"><header><h2><span class="card-icon">●</span> 今日補水</h2><a href="/water/">›</a></header><strong id="target-ato">-- 次</strong><span>今日運作次數</span><div class="utility-track"><i id="target-ato-bar"></i></div></article>
+        <article class="target-card utility-card"><header><h2><span class="card-icon">▣</span> 今日捲棉</h2><a href="/water/">›</a></header><strong id="target-roller">-- 次</strong><span>今日運作次數</span><div class="utility-track"><i id="target-roller-bar"></i></div></article>
       </div>
+      <article class="target-card target-pi"><header><h2><span class="pi-icon">●</span> Raspberry Pi</h2><a href="/system/">›</a></header><div id="target-pi-facts" class="target-pi-facts"><span>正在讀取系統狀態</span></div></article>
     </section>
+
+    <article class="target-card target-flow">
+      <header><h2><span class="card-icon">≋</span> 水流系統</h2><a href="/jebao/">›</a></header>
+      <div id="home-jebao" class="target-flow-grid"><p class="muted">正在讀取 Jebao 設備</p></div>
+    </article>
+    <div class="compatibility-state sr-only"><span id="module-dosing"></span><span id="module-water"></span><span id="module-power"></span><span id="module-thread"></span><span id="console-clock"></span><span id="console-date"></span><div id="home-logbook"></div></div>
     <section id="bootstrap-card" class="notice hidden"><div><strong>需要完成一次系統 Bootstrap</strong><p>安裝 BLE 與安全維護助手後，所有 Hub 元件即可從網頁 OTA。</p></div><code id="bootstrap-command"></code></section>
   </main>
   <footer>ReefTank Hub <span>Raspberry Pi 本機運行</span></footer>

@@ -13,6 +13,7 @@ type RetentionCleanup struct {
 	EntitySamples      int64 `json:"entity_samples"`
 	TemperatureSamples int64 `json:"temperature_samples"`
 	EquipmentEvents    int64 `json:"equipment_events"`
+	JebaoSamples       int64 `json:"jebao_samples"`
 }
 
 func ValidRetentionDays(days int) bool {
@@ -58,6 +59,7 @@ func (d *DB) CleanupRetention(ctx context.Context) (RetentionCleanup, error) {
 		{`DELETE FROM entity_samples WHERE source_time < ?`, &out.EntitySamples},
 		{`DELETE FROM temperature_samples WHERE source_time < ?`, &out.TemperatureSamples},
 		{`DELETE FROM equipment_events WHERE started_at < ?`, &out.EquipmentEvents},
+		{`DELETE FROM jebao_samples WHERE sampled_at < ?`, &out.JebaoSamples},
 	} {
 		result, execErr := tx.ExecContext(ctx, q.sql, cutoff)
 		if execErr != nil {

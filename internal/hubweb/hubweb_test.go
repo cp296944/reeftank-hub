@@ -22,6 +22,8 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 	}{
 		{"/", 200, "ReefTank Hub", ""},
 		{"/hub-assets/console.css", 200, "system-monitor", ""},
+		{"/hub-assets/console-v2.css", 200, "Hub console v2", ""},
+		{"/hub-assets/theme.js", 200, "reef-view-mode", ""},
 		{"/hub-assets/app.js", 200, "formatWaterValue(key,point.value)", ""},
 		{"/hub-assets/app.js", 200, "40 g KH粉配上500 mL水", ""},
 		{"/api/hub/status", 200, `"version":"hub-vtest"`, ""},
@@ -34,6 +36,7 @@ func TestHubRoutesAndK7Compatibility(t *testing.T) {
 		{"/water/", 200, "樹莓派本機資料庫", ""},
 		{"/system/", 200, "系統狀態", ""},
 		{"/thread/", 200, "ESP32-C6 RCP", ""},
+		{"/jebao/", 200, "JEBAO 造浪與主馬", ""},
 		{"/api/version", 200, "k7", "/api/version"},
 		{"/static/index.html", 200, "k7", "/static/index.html"},
 	}

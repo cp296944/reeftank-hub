@@ -1,92 +1,154 @@
+<div align="center">
+
 # ReefTank Hub
 
-Raspberry Pi 上的海水缸資料與設備中控。Hub 提供單一網頁入口、本機歷史資料、K7 燈具控制、魔點四頭滴定介面，以及 Home Assistant 與小魚未來水溫整合。
+**在 Raspberry Pi 上整合海水缸監控、設備控制、歷史資料與安全更新的本機中控台**
 
-## 系統分工
+[![Release](https://img.shields.io/github/v/release/cp296944/reeftank-hub?display_name=tag&sort=semver&color=19d3e6)](https://github.com/cp296944/reeftank-hub/releases/latest)
+[![Build and release](https://github.com/cp296944/reeftank-hub/actions/workflows/build-release.yml/badge.svg)](https://github.com/cp296944/reeftank-hub/actions/workflows/build-release.yml)
+![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)
+![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-linux%2Farm64-C51A4A?logo=raspberrypi&logoColor=white)
 
-- **ReefTank Hub**：彙整、歷史保存、網頁操作、K7、滴定機及 OTA。
-- **Home Assistant**：設備管理、自動化與通知。Hub 不搬移或取代現有 HA 自動化。
-- **Hub SQLite**：NO3、PO4、pH、SG、KH、Ca、Mg 與換水紀錄的主資料來源。
-- **小魚未來 API**：預設由 Hub 與 HA 各自查詢；可在系統頁手動改由 HA 提供，且不會自動切換。
+[最新版本](https://github.com/cp296944/reeftank-hub/releases/latest) · [完整更新紀錄](CHANGELOG.md) · [系統設計](docs/DESIGN.md) · [API 文件](docs/API.md)
 
-## 網頁入口
+</div>
 
-- `/`：ReefTank Hub 首頁
-- `/K7/`：K7 完整控制（三燈連動、單一主燈）
-- `/dosing/`：魔點四頭滴定
-- `/calculator/`：獨立滴定計算工具（只計算）
-- `/power/`：HA 電源監控與設備映射
-- `/jebao/`：JEBAO 主馬與造浪的 LAN 監控、歷史、轉速／強度、餵食及 IP 設定（四台已登錄 MAC）
-- `/water/`：水質與換水
-- `/system/`：服務狀態、備份與 OTA
-- `/thread/`：ESP32-C6 RCP、OTBR 與 HA Matter 狀態
+![ReefTank Hub 首頁總覽](docs/images/dashboard-overview.png)
 
-## Raspberry Pi 目標
+ReefTank Hub 將水溫、水質、耗電、滴定、回水馬達、造浪與 Raspberry Pi 狀態集中在同一個深色儀表板。所有核心服務與歷史資料都留在區域網路內；介面提供日覽、夜覽與依所在地時間自動切換。正式版本自 **`hub-v1.0.0`** 起採用 1.x.x 版號。
 
-- Raspberry Pi OS 64-bit / `linux/arm64`
-- LAN：`eth0`
-- K7 AP：`wlan0`，燈具 `192.168.4.1:8266`
-- 安裝根目錄：`/opt/reeftank-hub`
-- systemd：`reeftank-hub.service`
-- Release：`hub-v*`
-- OTA 資產：`reeftank-hub-linux-arm64`
+> README 截圖由內建測試資料產生，不包含實際設備的 IP、MAC、Token 或水族箱紀錄。
 
-目前 Raspberry Pi 已運行 ReefTank Hub，並保留每次部署的獨立 release 目錄與
-上一版回滾點。正式版本自 `hub-v1.0.0` 起採 1.x.x；完整歷代內容收錄於
-[CHANGELOG.md](CHANGELOG.md)，同一份紀錄也嵌入右上角版號視窗，離線仍可查看。
+## 主要功能
 
-## K7 雙專案同步原則
+| 模組 | 能力 |
+| --- | --- |
+| 儀表板 | 水溫、水質、即時功率、月耗電、四頭滴定、生命維持設備與水流系統總覽 |
+| K7 燈具 | 保留既有三燈連動與單燈控制介面；Hub 升級不改寫 K7 操作流程 |
+| JEBAO | 一台主馬與三台造浪的四欄狀態、四欄獨立設定、24 小時／7 天／30 天歷史 |
+| 電源 | 三條排插並排、18 路即時狀態、獨立開關、LED、功率與用電趨勢 |
+| 水質 | NO₃、PO₄、pH、SG、KH、Ca、Mg、換水與水溫歷史，保存於本機 SQLite |
+| 魔點滴定 | 四泵頭、校正、容器餘量、手動滴定、星期與分次排程、讀回確認、操作稽核 |
+| Thread / Matter | ESP32-C6 RCP、OTBR 與 Home Assistant Matter 狀態整合 |
+| 系統 | 服務狀態、備份、版本歷程、手動／自動 OTA 與失敗回滾 |
 
-ReefTank Hub 內的 K7 共用程式是日後功能開發來源。`sync/k7-paths.txt` 明確列出允許同步回 `cp296944/k7-led-Raspberry-controller` 的路徑。同步流程只建立舊專案的 PR，不直接推送到舊專案預設分支，也不把 Hub、滴定、HA 或資料庫程式帶回 K7 專案。
+## 介面預覽
 
-跨專案自動 PR 需要專用 fine-grained token，權限僅限舊 K7 repo 的 Contents 與 Pull requests。未設定 token 時，CI 只做差異檢查，仍可使用本機同步工具。
+### 一眼掌握整缸狀態
 
-## Home Assistant 憑證
+首頁將重要資訊依操作頻率排在同一個 16:9 工作區：左側是系統與水質趨勢，中間是水溫、最新水質及四個滴定頭，右側是用電與 Raspberry Pi 狀態，底部顯示主馬與三台造浪。
 
-HA 位址與 Long-Lived Access Token 只放在 Raspberry Pi 的
-`/etc/reeftank-hub/ha.env`。此檔案為 root-only、由 systemd 載入，不會寫入
-`config.json`、Hub 資料備份或 Git repository。環境變數名稱為 `HA_URL` 與
-`HA_TOKEN`；應使用專屬 HA 使用者所建立的 Token。
+### 三條排插同列監控
 
-## 小魚未來獨立水溫
+電源頁在寬螢幕上一排顯示三條排插，每條排插包含六路設備、即時電氣數據、開關與總能耗；下方接續顯示功率、電流及月用電趨勢。
 
-在同一個 root-only 環境檔設定 `XIAOYU_URL`。網址包含設備序號，因此視為
-敏感資料，不寫入一般設定、網頁回應、備份或 Git。Hub 每 60 秒直接查詢、
-保留最後成功值及延遲／過期狀態，並將歷史永久保存到 SQLite。系統頁可手動
-選擇 Hub 直連或 HA 來源；失敗時不會暗中切換。
+![電源頁：三條排插一排](docs/images/power-dashboard.png)
 
-## 本機水質資料
+### 四台 JEBAO 同步查看、分別設定
 
-既有 Excel 的 73 筆水質與換水紀錄會在升級時冪等匯入 SQLite。之後由
-`/water/` 直接新增資料，並與水溫歷史集中顯示；重啟與 OTA 不會重複匯入。
+JEBAO 頁第一排固定呈現主馬與三台造浪的在線狀態、設定值和歷史曲線，第二排提供四台設備各自的連線與強度設定。每台設備都有獨立歷史紀錄。
 
-## 魔點四頭滴定
+![JEBAO 頁：四台狀態與四台設定](docs/images/jebao-dashboard.png)
 
-目前提供完整軟體模擬模式：四泵頭、校正、容器／液量、手動滴定、每日總量、
-分次與星期排程、讀回確認、操作稽核及故障注入。所有 BLE capability 明確標成
-尚未實機驗證，避免模擬成功被誤認為設備已執行。獨立計算模組依原 Excel
-參數進行雙向換算；計算結果不會啟動、設定或傳送到滴定機。
+## 系統架構
 
-Hub 首頁右上角集中管理檢查更新、立即 OTA、自動更新與版本歷程；K7
-頁面只保留燈具本身的語言、監視與設定。電源頁透過 HA API 顯示三條
-排插的即時狀態、18 路明細、總能耗及 7 天趨勢，控制操作只允許目前
-設備映射中的插座與三條排插 LED。
+```mermaid
+flowchart LR
+    Browser[瀏覽器] --> Hub[ReefTank Hub<br/>Go 單一執行檔]
+    Hub --> DB[(本機 SQLite<br/>水質、溫度、設備歷史)]
+    Hub --> K7[K7 燈具<br/>Wi-Fi AP]
+    Hub --> Jebao[JEBAO 主馬與造浪<br/>Local LAN]
+    Hub --> HA[Home Assistant]
+    Hub --> Temp[小魚未來水溫 API]
+    Hub --> OTBR[OTBR / ESP32-C6 RCP]
+    HA --> Power[三條排插 / 18 路設備]
+    HA --> Matter[Matter 裝置]
+```
 
-HS300的高頻路徑由Hub直接向排插讀取，不改動HA整合的60秒週期。每條排插可
-設定輪詢秒數，每個插座可獨立開關；短時間電流／功率動作會保存為本機事件，
-用於補水與捲棉的今日次數及30日圖表。
+ReefTank Hub 負責彙整、網頁操作、歷史保存、K7、滴定與 OTA。Home Assistant 繼續負責既有設備管理、自動化與通知；Hub 不搬移或取代 HA 自動化。水溫來源可在系統頁手動選擇 Hub 直連或 HA，來源失敗時不會暗中切換。
 
-Thread方案使用ESP32-C6作USB OpenThread RCP，樹莓派執行OTBR，IKEA
-Matter-over-Thread裝置仍由HA Matter管理。首次刷寫與組網必須在C6實機接上後
-驗證，未驗證前Hub只顯示真實狀態，不會提供看似成功的危險刷寫操作。
+## 頁面導覽
 
-## 開發
+| 路徑 | 頁面 | 說明 |
+| --- | --- | --- |
+| `/` | 總覽 | 全系統即時儀表板 |
+| `/K7/` | K7 燈具 | 原有 K7 完整控制介面，維持既有設計與邏輯 |
+| `/dosing/` | 滴定 | 魔點四頭滴定、排程、校正與稽核 |
+| `/calculator/` | 計算 | 獨立滴定計算，不傳送指令至設備 |
+| `/power/` | 電源 | 三條排插、18 路設備與耗電紀錄 |
+| `/jebao/` | JEBAO | 主馬與三台造浪的狀態、設定與歷史 |
+| `/water/` | 水質 | 水質、換水與水溫資料 |
+| `/thread/` | Thread | RCP、OTBR 與 Matter 狀態 |
+| `/system/` | 系統 | 服務、備份、資料保留與更新設定 |
+
+## 資料與控制邊界
+
+- **K7 不受介面改版影響。** `/K7/` 保留燈具原本的頁面與操作邏輯；允許同步回舊 K7 專案的程式路徑明列於 [`sync/k7-paths.txt`](sync/k7-paths.txt)。
+- **敏感憑證不進 Git。** `HA_URL`、`HA_TOKEN` 與含設備序號的 `XIAOYU_URL` 只放在 Raspberry Pi 的 root-only `/etc/reeftank-hub/ha.env`。
+- **JEBAO 寫入有設備核對。** 控制前核對登錄 MAC 與產品型號，並保留 ACK／讀回結果；介面百分比代表設定值，不宣稱是實際流量計讀值。
+- **滴定模擬與實機狀態分開。** BLE capability 尚未實機驗證時會明確顯示 `ble_verified=false`，避免把模擬成功誤認為設備已執行。
+- **OTA 可回滾。** Pi 保留獨立 release 目錄與上一版回滾點；右上角可檢查更新、查看完整版本歷程並設定自動更新。
+
+## Raspberry Pi 執行環境
+
+| 項目 | 預設值 |
+| --- | --- |
+| 作業系統 | Raspberry Pi OS 64-bit / `linux/arm64` |
+| LAN | `eth0` |
+| K7 AP | `wlan0`，燈具 `192.168.4.1:8266` |
+| 安裝根目錄 | `/opt/reeftank-hub` |
+| systemd 服務 | `reeftank-hub.service` |
+| Release tag | `hub-v*` |
+| OTA 資產 | `reeftank-hub-linux-arm64` |
+
+正式部署使用 GitHub Release 的 ARM64 單一執行檔。更新器會驗證下載結果，再切換 `current` release 並重新啟動服務；詳細流程與目錄結構收錄於 [`docs/DESIGN.md`](docs/DESIGN.md)。
+
+## 開發與驗證
+
+需要 Go 1.23 或更新版本。從原始碼啟動本機服務：
 
 ```bash
 go test ./...
 go run ./cmd/reeftank-hub --listen :8080 --data-dir ./data --proxy=
 ```
 
-完整決策與階段請見 [PROGRESS.md](PROGRESS.md) 與 `D:\HomeAssistant\REEFTANK\REEFTANK_HUB_DEVELOPMENT_PLAN.md`。
+建立 Raspberry Pi ARM64 執行檔：
 
-舊 K7 Pi Bridge 文件已保存在 [docs/K7_INHERITED_README.md](docs/K7_INHERITED_README.md)，來源歷史仍完整保留於舊 K7 repository。
+```bash
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+  go build -trimpath -o reeftank-hub-linux-arm64 ./cmd/reeftank-hub
+```
+
+UI 可靠性測試會檢查 8 個頁面、6 種寬度、主題保存、表單輸入保留與瀏覽器錯誤：
+
+```bash
+node tests/ui-reliability.cjs
+```
+
+## 專案結構
+
+```text
+cmd/reeftank-hub/   Hub 主程式、啟動與設定流程
+internal/hubweb/    儀表板頁面、樣式與前端互動
+internal/httpapi/   Hub HTTP API
+internal/storage/   SQLite 與歷史資料
+internal/jebao/     JEBAO 探索、監控與控制
+internal/updater/   OTA、版本檢查與回滾
+deploy/             Raspberry Pi 安裝與服務檔案
+firmware/           ESP32-C6 RCP 相關內容
+tests/              端對端與 UI 可靠性驗證
+docs/               API、設計與設備整合文件
+```
+
+## 文件
+
+- [`CHANGELOG.md`](CHANGELOG.md)：從早期 K7 Pi Bridge 到 `hub-v1.0.0` 的完整版本紀錄
+- [`PROGRESS.md`](PROGRESS.md)：開發進度、驗證結果與未完成項目
+- [`docs/API.md`](docs/API.md)：HTTP API 路徑與資料格式
+- [`docs/DESIGN.md`](docs/DESIGN.md)：架構、部署、OTA 與安全設計
+- [`docs/JEBAO.md`](docs/JEBAO.md)：JEBAO 協定、設備識別與控制限制
+- [`docs/DOSING_CAPABILITIES.md`](docs/DOSING_CAPABILITIES.md)：滴定功能與實機驗證狀態
+- [`docs/THREAD_MATTER.md`](docs/THREAD_MATTER.md)：Thread Border Router 與 Matter 整合
+- [`docs/K7_INHERITED_README.md`](docs/K7_INHERITED_README.md)：舊 K7 Pi Bridge 文件
+
+版本頁與每個 GitHub Release 都以同一份 [`CHANGELOG.md`](CHANGELOG.md) 為準，讓離線設備與 GitHub 顯示一致的更新內容。

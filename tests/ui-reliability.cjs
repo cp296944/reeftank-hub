@@ -28,7 +28,7 @@ const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost'),p=url.pathname;
  if(p.startsWith('/api/')){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data[p]??{}));return}
  if(p.startsWith('/hub-assets/')){const f=p.slice('/hub-assets/'.length);res.setHeader('Content-Type',f.endsWith('.css')?'text/css':f.endsWith('.png')?'image/png':'text/javascript');res.end(fs.readFileSync(path.join(assets,...f.split('/'))));return}
- const module=p.split('/')[1];let html=fs.readFileSync(path.join(assets,module?'module.html':'index.html'),'utf8');html=html.replaceAll('{{MODULE}}',module).replaceAll('{{TITLE}}','系統測試').replaceAll('{{SUBTITLE}}','介面驗證').replaceAll('{{DETAIL}}','載入資料');res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);
+ const module=p.split('/')[1],titles={system:'系統狀態',water:'水質與換水',power:'電源監控',jebao:'JEBAO 造浪與主馬',thread:'Thread / Matter',calculator:'滴定計算工具',dosing:'魔點四頭滴定'},title=titles[module]||'ReefTank Hub';let html=fs.readFileSync(path.join(assets,module?'module.html':'index.html'),'utf8');html=html.replaceAll('{{MODULE}}',module).replaceAll('{{TITLE}}',title).replaceAll('{{SUBTITLE}}','本機設備與資料管理').replaceAll('{{DETAIL}}','正在載入即時資料');res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);
 });
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -82,7 +82,7 @@ const server=http.createServer((req,res)=>{
   await page.route('**/api/hub/water/records',r=>r.abort());await page.getByRole('button',{name:'儲存到樹莓派'}).click();await page.waitForFunction(()=>!document.querySelector('.water-form-actions button').disabled);
   assert.equal(await page.locator('[data-water=po4]').inputValue(),'0.01');assert(dialogs.pop().includes('輸入已保留'));
   assert.deepEqual(errors,[]);
-  if(process.env.UI_SCREENSHOT){const route=process.env.UI_SCREENSHOT_ROUTE||'/system/';await page.setViewportSize({width:Number(process.env.UI_SCREENSHOT_WIDTH||390),height:Number(process.env.UI_SCREENSHOT_HEIGHT||900)});await page.goto(base+route);await page.waitForTimeout(250);await page.screenshot({path:process.env.UI_SCREENSHOT,fullPage:true})}
+  if(process.env.UI_SCREENSHOT){const route=process.env.UI_SCREENSHOT_ROUTE||'/system/';await page.setViewportSize({width:Number(process.env.UI_SCREENSHOT_WIDTH||390),height:Number(process.env.UI_SCREENSHOT_HEIGHT||900)});await page.goto(base+route);await page.waitForTimeout(250);await page.screenshot({path:process.env.UI_SCREENSHOT,fullPage:process.env.UI_SCREENSHOT_FULL_PAGE!=='false'})}
   console.log('PASS: 8 pages x 6 widths; theme persistence; retention alignment; equipment/water disconnected saves preserve inputs and unlock; zero page errors.');
  }finally{await browser.close();server.close()}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1});
